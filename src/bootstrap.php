@@ -14,14 +14,36 @@ const THEME_BOOT = "(function(){try{var s=localStorage.getItem('gamerpro-theme')
 
 $src = __DIR__;
 require $src . '/Scrypt.php';
+require $src . '/schema.php';
 require $src . '/helpers.php';
 require $src . '/access.php';
 require $src . '/ui.php';
 require $src . '/portal.php';
 
+/** Настройки из config.php в корне сайта (на хостинге). Нет файла — пустой массив. */
+function app_config(): array
+{
+    static $cfg = null;
+    if ($cfg === null) {
+        $file = dirname(__DIR__) . '/config.php';
+        $loaded = is_file($file) ? require $file : [];
+        $cfg = is_array($loaded) ? $loaded : [];
+    }
+    return $cfg;
+}
+
+/**
+ * Доступ к базе. Драйвер выбирается так:
+ *  - config.php с 'db' => ['driver' => 'mysql', ...] — MySQL на хостинге;
+ *  - переменная окружения GAMERPRO_DB_DRIVER=mysql — MySQL для проверки локально;
+ *  - иначе SQLite: storage/gamerpro.sqlite (или путь из GAMERPRO_DB).
+ * SQL портала пишется с идентификаторами в двойных кавычках — в MySQL для этого
+ * включается ANSI_QUOTES, поэтому один и тот же запрос работает в обеих базах.
+ */
 final class Db
 {
     private static ?PDO $pdo = null;
+    private static string $driver = 'sqlite';
 
     public static function path(): string
     {
@@ -29,15 +51,55 @@ final class Db
         return is_string($env) && $env !== '' ? $env : dirname(__DIR__) . '/storage/gamerpro.sqlite';
     }
 
+    /** @return array{driver: string, host?: string, port?: int, name?: string, user?: string, pass?: string, socket?: string} */
+    public static function config(): array
+    {
+        if (getenv('GAMERPRO_DB_DRIVER') === 'mysql') {
+            return [
+                'driver' => 'mysql',
+                'host' => (string) (getenv('GAMERPRO_DB_HOST') ?: '127.0.0.1'),
+                'port' => (int) (getenv('GAMERPRO_DB_PORT') ?: 3306),
+                'name' => (string) getenv('GAMERPRO_DB_NAME'),
+                'user' => (string) getenv('GAMERPRO_DB_USER'),
+                'pass' => (string) getenv('GAMERPRO_DB_PASS'),
+                'socket' => (string) (getenv('GAMERPRO_DB_SOCKET') ?: ''),
+            ];
+        }
+        $db = app_config()['db'] ?? [];
+        if (is_array($db) && ($db['driver'] ?? '') === 'mysql') {
+            return $db + ['host' => 'localhost', 'port' => 3306, 'name' => '', 'user' => '', 'pass' => '', 'socket' => ''];
+        }
+        return ['driver' => 'sqlite'];
+    }
+
+    public static function driver(): string
+    {
+        self::pdo();
+        return self::$driver;
+    }
+
     public static function pdo(): PDO
     {
         if (self::$pdo) {
             return self::$pdo;
         }
+        $cfg = self::config();
+        if ($cfg['driver'] === 'mysql') {
+            self::$pdo = self::connectMysql($cfg);
+            self::$driver = 'mysql';
+        } else {
+            self::$pdo = self::connectSqlite();
+            self::$driver = 'sqlite';
+        }
+        Schema::migrate(self::$pdo, self::$driver);
+        return self::$pdo;
+    }
+
+    private static function connectSqlite(): PDO
+    {
         $path = self::path();
         if (!is_file($path)) {
-            http_response_code(500);
-            exit('Нет базы данных: storage/gamerpro.sqlite');
+            self::fail('Не найдена база данных storage/gamerpro.sqlite. Загрузите папку storage на хостинг или укажите MySQL в config.php.');
         }
         $pdo = new PDO('sqlite:' . $path, null, null, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -45,9 +107,69 @@ final class Db
         ]);
         $pdo->exec('PRAGMA foreign_keys = ON');
         $pdo->exec('PRAGMA busy_timeout = 5000');
-        self::$pdo = $pdo;
-        self::migrate($pdo);
         return $pdo;
+    }
+
+    private static function connectMysql(array $cfg): PDO
+    {
+        if (!extension_loaded('pdo_mysql')) {
+            self::fail('На хостинге не включено расширение PHP pdo_mysql. Включите его в панели reg.ru (Настройки PHP → Расширения).');
+        }
+        $dsn = !empty($cfg['socket'])
+            ? 'mysql:unix_socket=' . $cfg['socket'] . ';dbname=' . $cfg['name'] . ';charset=utf8mb4'
+            : 'mysql:host=' . $cfg['host'] . ';port=' . (int) $cfg['port'] . ';dbname=' . $cfg['name'] . ';charset=utf8mb4';
+        try {
+            $pdo = new PDO($dsn, (string) $cfg['user'], (string) $cfg['pass'], [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_STRINGIFY_FETCHES => false,
+            ]);
+        } catch (PDOException $e) {
+            error_log('[gamerpro] mysql connect: ' . $e->getMessage());
+            self::fail('Не удалось подключиться к базе MySQL «' . $cfg['name'] . '». Проверьте имя базы, пользователя и пароль в config.php.');
+        }
+        // Нестрогий режим, как у SQLite: слишком длинная строка обрезается, а не роняет страницу.
+        $pdo->exec("SET SESSION sql_mode = 'ANSI_QUOTES,PIPES_AS_CONCAT,NO_ENGINE_SUBSTITUTION'");
+        $pdo->exec("SET time_zone = '+05:00'");
+        return $pdo;
+    }
+
+    private static function fail(string $message): never
+    {
+        http_response_code(500);
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Нет связи с базой · ' . APP_NAME . '</title></head>';
+        echo '<body style="font-family:system-ui,sans-serif;max-width:36rem;margin:12vh auto;padding:0 1.25rem;line-height:1.55;color:#16181d">';
+        echo '<h1 style="font-size:1.35rem">Портал временно недоступен</h1><p>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p></body></html>';
+        exit;
+    }
+
+    private static function quoteIdent(string $name): string
+    {
+        return '"' . str_replace('"', '', $name) . '"';
+    }
+
+    /** INSERT строки, возвращает id новой записи. */
+    public static function insert(string $table, array $row): int
+    {
+        $cols = array_map([self::class, 'quoteIdent'], array_keys($row));
+        self::exec(
+            'INSERT INTO ' . self::quoteIdent($table) . ' (' . implode(', ', $cols) . ') VALUES (' . implode(', ', array_fill(0, count($row), '?')) . ')',
+            array_values($row),
+        );
+        return (int) self::lastId();
+    }
+
+    /** INSERT, который молча пропускает строку, если она нарушает уникальный индекс. */
+    public static function insertIgnore(string $table, array $row): void
+    {
+        $verb = self::driver() === 'mysql' ? 'INSERT IGNORE INTO ' : 'INSERT OR IGNORE INTO ';
+        $cols = array_map([self::class, 'quoteIdent'], array_keys($row));
+        self::exec(
+            $verb . self::quoteIdent($table) . ' (' . implode(', ', $cols) . ') VALUES (' . implode(', ', array_fill(0, count($row), '?')) . ')',
+            array_values($row),
+        );
     }
 
     public static function all(string $sql, array $params = []): array
@@ -98,113 +220,6 @@ final class Db
                 $pdo->rollBack();
             }
             throw $e;
-        }
-    }
-
-    private static function hasColumn(PDO $pdo, string $table, string $column): bool
-    {
-        $rows = $pdo->query('PRAGMA table_info("' . str_replace('"', '', $table) . '")')->fetchAll();
-        foreach ($rows as $r) {
-            if (($r['name'] ?? '') === $column) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static function addColumn(PDO $pdo, string $table, string $column, string $definition): void
-    {
-        if (!self::hasColumn($pdo, $table, $column)) {
-            $pdo->exec('ALTER TABLE "' . $table . '" ADD COLUMN "' . $column . '" ' . $definition);
-        }
-    }
-
-    /**
-     * Версия схемы хранится в PRAGMA user_version. Каждый шаг идемпотентен:
-     * боевая база могла получить часть таблиц от прежней версии портала.
-     */
-    private static function migrate(PDO $pdo): void
-    {
-        try {
-            $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
-            $steps = [
-                static function (PDO $pdo): void {
-                    $pdo->exec('CREATE TABLE IF NOT EXISTS employee_fines (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        "employeeId" INTEGER NOT NULL,
-                        "employeeName" TEXT NOT NULL,
-                        reason TEXT NOT NULL,
-                        amount INTEGER NOT NULL,
-                        "createdByUserId" TEXT NOT NULL,
-                        "createdByName" TEXT NOT NULL,
-                        "createdAt" TEXT NOT NULL
-                    )');
-                    $pdo->exec('CREATE TABLE IF NOT EXISTS staff_tasks (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        "employeeId" INTEGER NOT NULL,
-                        date TEXT NOT NULL,
-                        title TEXT NOT NULL,
-                        description TEXT NOT NULL DEFAULT \'\',
-                        "createdByUserId" TEXT NOT NULL,
-                        "createdByName" TEXT NOT NULL,
-                        "createdAt" TEXT NOT NULL
-                    )');
-                    $pdo->exec('CREATE TABLE IF NOT EXISTS staff_task_done (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        "taskId" INTEGER NOT NULL,
-                        "userId" TEXT NOT NULL,
-                        "userName" TEXT NOT NULL,
-                        "completedAt" TEXT NOT NULL,
-                        UNIQUE("taskId", "userId")
-                    )');
-                    self::addColumn($pdo, 'exams', 'xpReward', 'INTEGER NOT NULL DEFAULT 100');
-                },
-                static function (PDO $pdo): void {
-                    self::addColumn($pdo, 'user', 'permissions', 'TEXT');
-                    self::addColumn($pdo, 'user', 'scopeBranchId', 'INTEGER');
-                    self::addColumn($pdo, 'employee_fines', 'ruleId', 'INTEGER');
-                    $pdo->exec('CREATE TABLE IF NOT EXISTS audit_log (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        "actorUserId" TEXT NOT NULL,
-                        "actorName" TEXT NOT NULL,
-                        "actorRole" TEXT NOT NULL,
-                        entity TEXT NOT NULL,
-                        action TEXT NOT NULL,
-                        summary TEXT NOT NULL,
-                        href TEXT NOT NULL DEFAULT \'/\',
-                        "createdAt" TEXT NOT NULL
-                    )');
-                    $pdo->exec('CREATE TABLE IF NOT EXISTS login_attempts (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        ip TEXT NOT NULL,
-                        login TEXT NOT NULL,
-                        "createdAt" INTEGER NOT NULL
-                    )');
-                },
-                static function (PDO $pdo): void {
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS audit_created_idx ON audit_log("createdAt")');
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS audit_entity_idx ON audit_log(entity, "createdAt")');
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS login_attempts_ip_idx ON login_attempts(ip, "createdAt")');
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS login_attempts_login_idx ON login_attempts(login, "createdAt")');
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS shifts_date_idx ON shifts(date)');
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS shifts_emp_date_idx ON shifts("employeeId", date)');
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS shifts_branch_date_idx ON shifts("branchId", date)');
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS staff_tasks_emp_date_idx ON staff_tasks("employeeId", date)');
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS review_bonuses_phone_idx ON review_bonuses("branchId", "guestPhone")');
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS announcement_reads_user_idx ON announcement_reads("userId", "announcementId")');
-                    $pdo->exec('CREATE INDEX IF NOT EXISTS keyboard_cleanings_week_idx ON keyboard_cleanings("branchId", "weekStart")');
-                },
-            ];
-            foreach ($steps as $i => $step) {
-                $n = $i + 1;
-                if ($n <= $version) {
-                    continue;
-                }
-                $step($pdo);
-                $pdo->exec('PRAGMA user_version = ' . $n);
-            }
-        } catch (PDOException $e) {
-            error_log('[gamerpro] migration failed: ' . $e->getMessage());
         }
     }
 }

@@ -1,9 +1,22 @@
 DirectoryIndex index.php
 Options -Indexes
+AddDefaultCharset UTF-8
+
+# Служебные файлы не отдаются браузеру: доступы к базе, дамп, исходники, сборка.
+<FilesMatch "^(config\.php|config\.example\.php|package\.json|pnpm-lock\.yaml|\.env.*|.*\.sql|.*\.sqlite.*|.*\.md)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+  RewriteRule ^(src|storage|database|scripts|node_modules|\.git)(/|$) - [F,L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^ index.php [L,QSA]
@@ -14,4 +27,11 @@ Options -Indexes
   Header set X-Frame-Options "SAMEORIGIN"
   Header set Referrer-Policy "strict-origin-when-cross-origin"
   Header set X-Robots-Tag "noindex, nofollow"
+  <FilesMatch "\.(css|js|woff2|webp|png|svg)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript image/svg+xml application/manifest+json
 </IfModule>

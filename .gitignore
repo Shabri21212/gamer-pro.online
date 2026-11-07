@@ -7,4 +7,5 @@ storage/*.sqlite-shm
 storage/sessions/
 .env
 .env.*
+config.php
 .DS_Store
