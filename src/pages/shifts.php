@@ -31,6 +31,14 @@ trait PagesShifts
         }
         $live = self::liveShifts();
         $soon = self::soonByBranch();
+        $handover = self::handoverShift($user);
+        $handoverPhase = $handover
+            ? self::handoverNextPhase($handover, self::handoverReports((int) $handover['branchId'], (string) $handover['date'], (string) $handover['shiftType']))
+            : null;
+        $attention = [];
+        if ($handoverPhase === 'close' && $handover['state']['state'] === 'done') {
+            $attention[] = [url_to('/shift'), 'clipboard-check', 'Смена закончилась, но не сдана — заполните кассу и чек-лист'];
+        }
         $wd = WEEKDAY_LONG[weekday_from_date_key($today)];
         $dateLabel = mb_strtoupper(mb_substr($wd, 0, 1)) . mb_substr($wd, 1) . ', ' . format_day_month($today);
 
@@ -42,7 +50,8 @@ trait PagesShifts
         $html .= '<div class="flex min-w-0 flex-col gap-6">';
         if ($eid) {
             $hero = $current ?? $next;
-            $html .= self::shiftTicket($hero, $live, $today);
+            $heroPhase = $hero && $handover && (int) $handover['id'] === (int) $hero['id'] ? $handoverPhase : null;
+            $html .= self::shiftTicket($hero, $live, $today, $heroPhase);
             $taskDate = $current['date'] ?? (($next && $next['date'] === $today) ? $today : null);
             if ($taskDate !== null) {
                 $html .= self::myTasksCard($user, $taskDate, $today);
@@ -53,7 +62,7 @@ trait PagesShifts
             $html .= self::clubsNowHero($live, $soon);
         }
         $html .= '</div><div class="flex min-w-0 flex-col gap-6">';
-        $html .= self::attentionCard($user);
+        $html .= self::attentionCard($user, $attention);
         if ($eid) {
             $html .= self::clubsNowCard($live, $soon);
         }
@@ -93,7 +102,7 @@ trait PagesShifts
         return $best;
     }
 
-    private static function shiftTicket(?array $s, array $live, string $today): string
+    private static function shiftTicket(?array $s, array $live, string $today, ?string $handoverPhase = null): string
     {
         $html = '<section class="cut relative flex flex-col gap-6 bg-sidebar p-5 text-sidebar-accent-foreground sm:p-7" style="--cut:26px" aria-labelledby="my-shift-title">';
         $html .= '<img src="' . h(asset('img/club-hall.webp')) . '" alt="" class="pointer-events-none absolute inset-y-0 right-0 hidden h-full w-1/2 object-cover opacity-25 [mask-image:linear-gradient(to_left,black,transparent)] sm:block" aria-hidden="true">';
@@ -129,8 +138,13 @@ trait PagesShifts
         } else {
             $html .= '<p class="relative text-sm text-sidebar-foreground">Начнётся через <span class="font-semibold text-sidebar-accent-foreground">' . h(duration_label($st['minutesToStart'])) . '</span></p>';
         }
-        $html .= '<a href="' . h(url_to('/schedule', ['branch' => self::branchById((int) $s['branchId'])['slug'] ?? null])) . '" class="relative inline-flex w-fit items-center gap-1.5 text-sm font-semibold hover:text-brand">График смен ' . icon('arrow', 'size-4') . '</a>';
-        return $html . '</section>';
+        $html .= '<div class="relative flex flex-wrap items-center gap-x-5 gap-y-3">';
+        if ($handoverPhase !== null && isset(HANDOVER_PHASES[$handoverPhase])) {
+            $meta = HANDOVER_PHASES[$handoverPhase];
+            $html .= '<a href="' . h(url_to('/shift')) . '" class="' . btn_class('primary') . '">' . icon($meta['icon'], 'size-4') . h($meta['verb']) . '</a>';
+        }
+        $html .= '<a href="' . h(url_to('/schedule', ['branch' => self::branchById((int) $s['branchId'])['slug'] ?? null])) . '" class="inline-flex w-fit items-center gap-1.5 text-sm font-semibold hover:text-brand">График смен ' . icon('arrow', 'size-4') . '</a>';
+        return $html . '</div></section>';
     }
 
     private static function myTasksCard(array $user, string $date, string $today): string
@@ -183,10 +197,9 @@ trait PagesShifts
         return card($html, 'p-5');
     }
 
-    private static function attentionCard(array $user): string
+    private static function attentionCard(array $user, array $items = []): string
     {
         $c = self::counts($user);
-        $items = [];
         if ($c['news'] > 0) {
             $items[] = [url_to('/news'), 'megaphone', plural($c['news'], 'новое объявление', 'новых объявления', 'новых объявлений')];
         }
@@ -653,7 +666,7 @@ trait PagesShifts
             $form .= '<label class="pill-check"><input type="checkbox" name="employees[]" value="' . (int) $e['id'] . '"' . $chk . ' class="peer sr-only"><span>' . h(short_name((string) $e['name'])) . '</span></label>';
         }
         $form .= '</div>';
-        $form .= '<label class="flex items-start gap-2 text-sm"><input type="radio" name="who" value="day" class="mt-0.5 ' . check_class() . '" data-who> <span>Всем дневным по графику <span class="text-muted-foreground">(день и сутки)</span></span></label>';
+        $form .= '<label class="flex items-start gap-2 text-sm"><input type="radio" name="who" value="day" class="mt-0.5 ' . check_class() . '" data-who> <span>Всем дневным по графику <span class="text-muted-foreground">(день и сут��и)</span></span></label>';
         $form .= '<label class="flex items-start gap-2 text-sm"><input type="radio" name="who" value="night" class="mt-0.5 ' . check_class() . '" data-who> <span>Всем ночным по графику <span class="text-muted-foreground">(ночь и сутки)</span></span></label></fieldset>';
         $form .= '<div class="grid grid-cols-2 gap-3">' . ui_field('С даты', '<input type="date" name="from" class="' . field_class() . '" value="' . h($preFrom) . '" required>') . ui_field('По дату', '<input type="date" name="to" class="' . field_class() . '" value="' . h($preTo) . '" required>') . '</div>';
         if ($templates) {

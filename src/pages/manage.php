@@ -104,7 +104,7 @@ trait PagesManage
     private static function auditIcon(string $entity): string
     {
         return [
-            'schedule' => 'calendar', 'tasks' => 'clipboard-list', 'cleaning' => 'keyboard', 'issues' => 'wrench',
+            'schedule' => 'calendar', 'handover' => 'clipboard-check', 'tasks' => 'clipboard-list', 'cleaning' => 'keyboard', 'issues' => 'wrench',
             'news' => 'megaphone', 'guests' => 'star', 'content' => 'tags', 'wiki' => 'book', 'fines' => 'scale',
             'exams' => 'grad', 'staff' => 'users', 'access' => 'key',
         ][$entity] ?? 'history';
@@ -451,7 +451,7 @@ trait PagesManage
                 $arch .= form_open('delete_employee', confirm_attr('Удалить «' . $name . '» навсегда? Удалятся его смены, задания, закреплённые места и штрафы. Отменить это нельзя.')) . hidden('id', $eid)
                     . '<button class="' . btn_class('danger-ghost', 'sm') . '">' . icon('trash', 'size-4') . 'Удалить</button></form></div></li>';
             }
-            $html .= self::collapsible('Архив', (string) count($archived), $arch . '</ul>', 'inbox');
+            $html .= self::collapsible('А��хив', (string) count($archived), $arch . '</ul>', 'inbox');
         }
 
         $old = form_stash_take('employee-new');

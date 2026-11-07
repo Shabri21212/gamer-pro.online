@@ -828,4 +828,57 @@
       });
     });
   })();
+
+  (function handover() {
+    document.querySelectorAll("[data-checklist]").forEach(function (form) {
+      var boxes = form.querySelectorAll("[data-check]");
+      var counter = form.querySelector("[data-check-count]");
+      if (counter && boxes.length) {
+        var paintCount = function () {
+          var done = 0;
+          boxes.forEach(function (b) {
+            if (b.checked) done++;
+          });
+          counter.textContent = done + " из " + boxes.length;
+        };
+        boxes.forEach(function (b) {
+          on(b, "change", paintCount);
+        });
+      }
+
+      var cash = form.querySelector("[data-cash]");
+      if (!cash) return;
+      var expected = cash.querySelector("[data-cash-expected]");
+      var actual = cash.querySelector("[data-cash-actual]");
+      var out = cash.querySelector("[data-cash-diff]");
+      var fmt = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
+      var tones = ["text-primary-ink", "text-foreground", "text-muted-foreground"];
+      function amount(input) {
+        var raw = String(input.value || "").replace(/[\s\u00a0\u202f₽]/g, "");
+        return /^\d{1,8}$/.test(raw) ? Number(raw) : null;
+      }
+      function paintDiff() {
+        var a = amount(expected);
+        var b = amount(actual);
+        var text = "—";
+        var tone = "text-muted-foreground";
+        if (a !== null && b !== null) {
+          var d = b - a;
+          if (d === 0) {
+            text = "Сходится";
+            tone = "text-foreground";
+          } else {
+            text = (d > 0 ? "+" : "−") + fmt.format(Math.abs(d)) + "\u00a0₽ " + (d > 0 ? "излишек" : "недостача");
+            tone = d > 0 ? "text-foreground" : "text-primary-ink";
+          }
+        }
+        out.textContent = text;
+        tones.forEach(function (t) {
+          out.classList.toggle(t, t === tone);
+        });
+      }
+      on(expected, "input", paintDiff);
+      on(actual, "input", paintDiff);
+    });
+  })();
 })();
