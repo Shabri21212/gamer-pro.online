@@ -37,6 +37,7 @@ final class Portal
         '/manage/tasks' => ['pageTasks', 'tasks.assign'],
         '/manage/accounts' => ['pageAccounts', 'owner'],
         '/manage/exams' => ['pageManageExams', 'exams.manage'],
+        '/manage/database' => ['pageDatabase', 'owner'],
     ];
 
     private const ACTIONS = [
@@ -86,6 +87,7 @@ final class Portal
         'reset_password' => 'doResetPassword',
         'delete_account' => 'doDeleteAccount',
         'change_password' => 'doChangePassword',
+        'download_dump' => 'doDownloadDump',
     ];
 
     private static ?array $countsCache = null;

@@ -93,6 +93,7 @@ const NAV_GROUPS = [
         ['href' => '/manage/grades', 'label' => 'Уровни и ставки', 'icon' => 'wallet', 'perm' => 'staff.manage'],
         ['href' => '/manage/exams', 'label' => 'Результаты экзаменов', 'icon' => 'clipboard-check', 'perm' => 'exams.manage'],
         ['href' => '/manage/accounts', 'label' => 'Доступы и права', 'icon' => 'key', 'perm' => 'owner'],
+        ['href' => '/manage/database', 'label' => 'База данных', 'icon' => 'database', 'perm' => 'owner'],
     ]],
 ];
 
