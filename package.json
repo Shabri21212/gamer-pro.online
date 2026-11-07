@@ -1,0 +1,15 @@
+{
+  "name": "gamerpro-crm",
+  "private": true,
+  "description": "GAMER PRO CRM — PHP-портал клуба. Node нужен только для сборки CSS.",
+  "scripts": {
+    "dev": "sh scripts/dev.sh",
+    "build": "tailwindcss -i assets/css/src/app.css -o assets/css/app.css --minify",
+    "watch:css": "tailwindcss -i assets/css/src/app.css -o assets/css/app.css --watch"
+  },
+  "devDependencies": {
+    "@fontsource-variable/unbounded": "5.3.0",
+    "@tailwindcss/cli": "4.3.5",
+    "tailwindcss": "4.3.5"
+  }
+}
