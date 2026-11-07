@@ -70,6 +70,7 @@ const NAV_GROUPS = [
         ['href' => '/', 'label' => 'Мой день', 'icon' => 'home'],
         ['href' => '/shift', 'label' => 'Приём и сдача', 'icon' => 'clipboard-check'],
         ['href' => '/schedule', 'label' => 'График смен', 'icon' => 'calendar'],
+        ['href' => '/bar', 'label' => 'Продажи бара', 'icon' => 'coins'],
         ['href' => '/cleaning', 'label' => 'Чистка клавиатур', 'icon' => 'keyboard'],
         ['href' => '/manage/tasks', 'label' => 'Задания на смены', 'icon' => 'clipboard-list', 'perm' => 'tasks.assign'],
     ]],
@@ -94,6 +95,7 @@ const NAV_GROUPS = [
         ['href' => '/manage/grades', 'label' => 'Уровни и ставки', 'icon' => 'wallet', 'perm' => 'staff.manage'],
         ['href' => '/manage/exams', 'label' => 'Результаты экзаменов', 'icon' => 'clipboard-check', 'perm' => 'exams.manage'],
         ['href' => '/manage/accounts', 'label' => 'Доступы и права', 'icon' => 'key', 'perm' => 'owner'],
+        ['href' => '/manage/langame', 'label' => 'Подключение Langame', 'icon' => 'link', 'perm' => 'owner'],
         ['href' => '/manage/database', 'label' => 'База данных', 'icon' => 'database', 'perm' => 'owner'],
     ]],
 ];

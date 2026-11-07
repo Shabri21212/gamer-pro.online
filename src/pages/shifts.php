@@ -105,7 +105,7 @@ trait PagesShifts
     private static function shiftTicket(?array $s, array $live, string $today, ?string $handoverPhase = null): string
     {
         $html = '<section class="cut relative flex flex-col gap-6 bg-sidebar p-5 text-sidebar-accent-foreground sm:p-7" style="--cut:26px" aria-labelledby="my-shift-title">';
-        $html .= '<img src="' . h(asset('img/club-hall.webp')) . '" alt="" class="pointer-events-none absolute inset-y-0 right-0 hidden h-full w-1/2 object-cover opacity-25 [mask-image:linear-gradient(to_left,black,transparent)] sm:block" aria-hidden="true">';
+        $html .= '<img src="' . h(asset('img/club/hall-wide-sm.webp')) . '" alt="" class="pointer-events-none absolute inset-y-0 right-0 hidden h-full w-1/2 object-cover opacity-25 [mask-image:linear-gradient(to_left,black,transparent)] sm:block" aria-hidden="true">';
         $html .= '<div class="relative flex flex-wrap items-center justify-between gap-3"><p class="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-sidebar-muted uppercase"><span class="cut-mark" aria-hidden="true"></span>Моя смена</p>';
         if (!$s) {
             $html .= '</div><div class="relative flex flex-col gap-2"><p id="my-shift-title" class="font-display text-2xl font-semibold">Смен пока нет</p><p class="max-w-md text-sm leading-relaxed text-sidebar-foreground">В ближайшие три недели вас нет в графике. Если вышли за кого-то — попросите поставить смену.</p></div>';

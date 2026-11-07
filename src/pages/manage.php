@@ -465,6 +465,8 @@ trait PagesManage
         $month = self::monthFromQuery();
         $units = self::shiftUnits($month['from'], $month['to']);
         $fines = self::finesTotals($month['from'], $month['to']);
+        $bar = Langame::totalsByEmployee($month['from'], $month['to']);
+        $hasBar = (bool) Langame::enabledBranchIds() || $bar;
         $emps = self::employees();
         $countByGrade = [];
         foreach ($emps as $e) {
@@ -510,17 +512,19 @@ trait PagesManage
         }
 
         $rows = [];
-        $sum = ['units' => 0, 'gross' => 0, 'fines' => 0];
+        $sum = ['units' => 0, 'gross' => 0, 'fines' => 0, 'bar' => 0];
         foreach ($emps as $e) {
             $eid = (int) $e['id'];
             $u = $units[$eid] ?? 0;
             $fn = $fines[$eid] ?? 0;
-            if (!boolish($e['isActive']) && $u === 0 && $fn === 0) {
+            $br = isset($bar[$eid]) ? (int) round($bar[$eid]['earn'] / 100) : 0;
+            if (!boolish($e['isActive']) && $u === 0 && $fn === 0 && $br === 0) {
                 continue;
             }
             $g = $e['gradeId'] !== null ? ($gradeById[(int) $e['gradeId']] ?? null) : null;
             $gross = $g ? $u * $g['shiftRate'] : 0;
-            $rows[] = ['e' => $e, 'g' => $g, 'units' => $u, 'gross' => $gross, 'fines' => $fn];
+            $rows[] = ['e' => $e, 'g' => $g, 'units' => $u, 'gross' => $gross, 'fines' => $fn, 'bar' => $br, 'barRev' => $bar[$eid]['revenue'] ?? 0];
+            $sum['bar'] += $br;
             $sum['units'] += $u;
             $sum['gross'] += $gross;
             $sum['fines'] += $fn;
@@ -530,21 +534,27 @@ trait PagesManage
         $nav .= '<span class="min-w-36 text-center font-display text-sm font-semibold">' . h($month['title']) . '</span>';
         $nav .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/manage/grades', ['m' => $month['next']])) . '" aria-label="Следующий месяц">' . icon('chevronright') . '</a></div>';
         $pay = '<section class="flex min-w-0 flex-col gap-4">' . section_title('Начисления за ' . $month['name'], $nav);
-        $pay .= '<div class="grid grid-cols-2 gap-3 xl:grid-cols-4">';
+        $pay .= '<div class="grid grid-cols-2 gap-3 ' . ($hasBar ? 'xl:grid-cols-5' : 'xl:grid-cols-4') . '">';
         $pay .= stat_tile('Смен', h(num_fmt($sum['units'])), 'сутки — за две');
         $pay .= stat_tile('По ставкам', h(money_rub($sum['gross'])));
+        if ($hasBar) {
+            $pay .= stat_tile('% с бара', h(money_rub($sum['bar'])), 'из Langame', url_to('/bar'), 'coins');
+        }
         $pay .= stat_tile('Штрафы', h(money_rub($sum['fines'])), '', url_to('/fines'), 'scale', $sum['fines'] > 0);
-        $pay .= stat_tile('К выплате', h(money_rub($sum['gross'] - $sum['fines'])), $month['isCurrent'] ? 'месяц ещё идёт' : '');
+        $pay .= stat_tile('К выплате', h(money_rub($sum['gross'] + $sum['bar'] - $sum['fines'])), $month['isCurrent'] ? 'месяц ещё идёт' : '');
         $pay .= '</div>';
         if ($rows) {
-            $pay .= table_open(['Сотрудник', 'Уровень', ['Смен', 'text-right'], ['По ставке', 'text-right whitespace-nowrap'], ['Штрафы', 'text-right'], ['К выплате', 'text-right whitespace-nowrap']]);
+            $pay .= table_open(array_merge(['Сотрудник', 'Уровень', ['Смен', 'text-right'], ['По ставке', 'text-right whitespace-nowrap']], $hasBar ? [['% с бара', 'text-right whitespace-nowrap']] : [], [['Штрафы', 'text-right'], ['К выплате', 'text-right whitespace-nowrap']]));
             foreach ($rows as $r) {
                 $e = $r['e'];
-                $net = $r['gross'] - $r['fines'];
+                $net = $r['gross'] + $r['bar'] - $r['fines'];
                 $pay .= '<tr class="border-t border-border"><th scope="row" class="px-4 py-3 text-left font-normal" data-label="Сотрудник"><span class="block font-semibold">' . h((string) $e['name']) . '</span><span class="text-xs text-muted-foreground">' . h(self::branchName((int) $e['homeBranchId'])) . (!boolish($e['isActive']) ? ' · в архиве' : '') . '</span></th>';
                 $pay .= td('Уровень', $r['g'] ? h((string) $r['g']['title']) . '<span class="block text-xs text-muted-foreground tabular-nums">' . h(money_rub($r['g']['shiftRate'])) . ' за смену</span>' : '<a class="text-sm text-primary-ink underline-offset-4 hover:underline" href="' . h(url_to('/manage/employees')) . '">Назначить уровень</a>');
                 $pay .= td('Смен', '<span class="tabular-nums">' . $r['units'] . '</span>', 'text-right');
                 $pay .= td('По ставке', '<span class="whitespace-nowrap tabular-nums">' . h(money_rub($r['gross'])) . '</span>', 'text-right');
+                if ($hasBar) {
+                    $pay .= td('% с бара', $r['bar'] > 0 ? '<span class="whitespace-nowrap tabular-nums">+' . h(money_rub($r['bar'])) . '</span><span class="block text-xs text-muted-foreground tabular-nums">с ' . h(kop_rub((int) $r['barRev'])) . '</span>' : '<span class="text-muted-foreground">—</span>', 'text-right');
+                }
                 $pay .= td('Штрафы', $r['fines'] > 0 ? '<span class="whitespace-nowrap text-primary-ink tabular-nums">−' . h(money_rub($r['fines'])) . '</span>' : '<span class="text-muted-foreground">—</span>', 'text-right');
                 $pay .= td('К выплате', '<span class="whitespace-nowrap font-display font-semibold tabular-nums">' . h(money_rub($net)) . '</span>', 'text-right');
                 $pay .= '</tr>';

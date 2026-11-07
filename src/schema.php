@@ -15,7 +15,7 @@ declare(strict_types=1);
  * Индексы: имя => 'колонка,колонка'; «!» в начале — уникальный.
  * Все строковые колонки в MySQL — utf8mb4_bin: сравнение и сортировка как в SQLite.
  */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 const SCHEMA = [
     'app_meta' => [
@@ -225,6 +225,36 @@ const SCHEMA = [
     'login_attempts' => [
         'columns' => ['id' => 'pk', 'ip' => 'str:64', 'login' => 'str:191', 'createdAt' => 'bigint'],
         'indexes' => ['ip' => 'ip,createdAt', 'login' => 'login,createdAt'],
+    ],
+    'langame_settings' => [
+        'columns' => [
+            'id' => 'pk', 'branchId' => 'int', 'baseUrl' => 'str:255', 'tokenEnc' => 'text', 'tokenHint' => 'str:16',
+            'barPercentX10' => 'int=0', 'isEnabled' => 'bool=0', 'lastSyncAt' => 'ts', 'lastSyncOk' => 'bool=0',
+            'lastError' => 'text', 'syncedFrom' => 'date', 'updatedAt' => 'ts',
+        ],
+        'indexes' => ['branch' => '!branchId'],
+    ],
+    'langame_staff' => [
+        'columns' => [
+            'id' => 'pk', 'branchId' => 'int', 'langameUserId' => 'int', 'langameName' => 'str:191', 'langameLogin' => 'str:191',
+            'employeeId' => 'int', 'percentX10' => 'int', 'updatedAt' => 'ts',
+        ],
+        'indexes' => ['branch_user' => '!branchId,langameUserId', 'employee' => 'employeeId'],
+    ],
+    'langame_shifts' => [
+        'columns' => ['id' => 'pk', 'branchId' => 'int', 'extId' => 'int', 'langameUserId' => 'int', 'dateStart' => 'str:32', 'dateStop' => 'str:32'],
+        'indexes' => ['branch_ext' => '!branchId,extId', 'branch_user' => 'branchId,langameUserId'],
+    ],
+    'langame_products' => [
+        'columns' => ['id' => 'pk', 'branchId' => 'int', 'extId' => 'int', 'name' => 'str:191'],
+        'indexes' => ['branch_ext' => '!branchId,extId'],
+    ],
+    'bar_sales' => [
+        'columns' => [
+            'id' => 'pk', 'branchId' => 'int', 'extId' => 'bigint', 'saleAt' => 'str:32', 'goodsId' => 'int', 'shiftExtId' => 'int',
+            'unitPriceX100' => 'int=0', 'qty' => 'int=1', 'amountX100' => 'int=0', 'isCancelled' => 'bool=0', 'isCashless' => 'bool=0',
+        ],
+        'indexes' => ['branch_ext' => '!branchId,extId', 'branch_date' => 'branchId,saleAt', 'branch_shift' => 'branchId,shiftExtId'],
     ],
 ];
 

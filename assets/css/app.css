@@ -291,6 +291,12 @@
   .left-3 {
     left: calc(var(--spacing) * 3);
   }
+  .isolate {
+    isolation: isolate;
+  }
+  .-z-10 {
+    z-index: calc(10 * -1);
+  }
   .z-10 {
     z-index: 10;
   }
@@ -432,6 +438,10 @@
   .table {
     display: table;
   }
+  .size-2 {
+    width: calc(var(--spacing) * 2);
+    height: calc(var(--spacing) * 2);
+  }
   .size-3 {
     width: calc(var(--spacing) * 3);
     height: calc(var(--spacing) * 3);
@@ -490,6 +500,9 @@
   }
   .h-0\.5 {
     height: calc(var(--spacing) * 0.5);
+  }
+  .h-1 {
+    height: var(--spacing);
   }
   .h-1\.5 {
     height: calc(var(--spacing) * 1.5);
@@ -671,6 +684,9 @@
   .min-w-5 {
     min-width: calc(var(--spacing) * 5);
   }
+  .min-w-32 {
+    min-width: calc(var(--spacing) * 32);
+  }
   .min-w-36 {
     min-width: calc(var(--spacing) * 36);
   }
@@ -821,6 +837,9 @@
   .gap-x-5 {
     column-gap: calc(var(--spacing) * 5);
   }
+  .gap-x-6 {
+    column-gap: calc(var(--spacing) * 6);
+  }
   .gap-y-1 {
     row-gap: var(--spacing);
   }
@@ -874,6 +893,9 @@
   }
   .rounded-sm {
     border-radius: 4px;
+  }
+  .rounded-xl {
+    border-radius: 12px;
   }
   .border {
     border-style: var(--tw-border-style);
@@ -950,6 +972,18 @@
   .border-sidebar-border {
     border-color: var(--sidebar-border);
   }
+  .border-sidebar-foreground\/10 {
+    border-color: var(--sidebar-foreground);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--sidebar-foreground) 10%, transparent);
+    }
+  }
+  .border-sidebar-foreground\/15 {
+    border-color: var(--sidebar-foreground);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--sidebar-foreground) 15%, transparent);
+    }
+  }
   .border-transparent {
     border-color: transparent;
   }
@@ -994,6 +1028,18 @@
   }
   .bg-foreground {
     background-color: var(--foreground);
+  }
+  .bg-foreground\/30 {
+    background-color: var(--foreground);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--foreground) 30%, transparent);
+    }
+  }
+  .bg-foreground\/60 {
+    background-color: var(--foreground);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--foreground) 60%, transparent);
+    }
   }
   .bg-muted {
     background-color: var(--muted);
@@ -1092,6 +1138,9 @@
   }
   .\[mask-image\:linear-gradient\(to_left\,black\,transparent\)\] {
     mask-image: linear-gradient(to left,black,transparent);
+  }
+  .\[mask-image\:linear-gradient\(to_left\,black_10\%\,transparent_85\%\)\] {
+    mask-image: linear-gradient(to left,black 10%,transparent 85%);
   }
   .object-cover {
     object-fit: cover;
@@ -1210,6 +1259,9 @@
   .pr-2 {
     padding-right: calc(var(--spacing) * 2);
   }
+  .pr-8 {
+    padding-right: calc(var(--spacing) * 8);
+  }
   .pr-9 {
     padding-right: calc(var(--spacing) * 9);
   }
@@ -1224,6 +1276,9 @@
   }
   .pb-2 {
     padding-bottom: calc(var(--spacing) * 2);
+  }
+  .pb-2\.5 {
+    padding-bottom: calc(var(--spacing) * 2.5);
   }
   .pb-4 {
     padding-bottom: calc(var(--spacing) * 4);
@@ -1281,6 +1336,10 @@
   .text-4xl {
     font-size: var(--text-4xl);
     line-height: var(--tw-leading, var(--text-4xl--line-height));
+  }
+  .text-5xl {
+    font-size: var(--text-5xl);
+    line-height: var(--tw-leading, var(--text-5xl--line-height));
   }
   .text-6xl {
     font-size: var(--text-6xl);
@@ -1460,6 +1519,18 @@
   .text-sidebar-foreground {
     color: var(--sidebar-foreground);
   }
+  .text-sidebar-foreground\/60 {
+    color: var(--sidebar-foreground);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--sidebar-foreground) 60%, transparent);
+    }
+  }
+  .text-sidebar-foreground\/70 {
+    color: var(--sidebar-foreground);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--sidebar-foreground) 70%, transparent);
+    }
+  }
   .text-sidebar-muted {
     color: var(--sidebar-muted);
   }
@@ -1498,11 +1569,20 @@
   .opacity-25 {
     opacity: 25%;
   }
+  .opacity-35 {
+    opacity: 35%;
+  }
+  .opacity-60 {
+    opacity: 60%;
+  }
   .opacity-70 {
     opacity: 70%;
   }
   .opacity-75 {
     opacity: 75%;
+  }
+  .opacity-80 {
+    opacity: 80%;
   }
   .shadow-2xl {
     --tw-shadow: 0 25px 50px -12px var(--tw-shadow-color, rgb(0 0 0 / 0.25));
@@ -1514,6 +1594,10 @@
   }
   .shadow-md {
     --tw-shadow: 0 4px 6px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 2px 4px -2px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .shadow-sm {
+    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
   .shadow-xs {
@@ -1843,6 +1927,12 @@
     .sm\:block {
       display: block;
     }
+    .sm\:w-24 {
+      width: calc(var(--spacing) * 24);
+    }
+    .sm\:w-48 {
+      width: calc(var(--spacing) * 48);
+    }
     .sm\:w-60 {
       width: calc(var(--spacing) * 60);
     }
@@ -1938,9 +2028,16 @@
     .sm\:px-10 {
       padding-inline: calc(var(--spacing) * 10);
     }
+    .sm\:pb-2 {
+      padding-bottom: calc(var(--spacing) * 2);
+    }
     .sm\:text-5xl {
       font-size: var(--text-5xl);
       line-height: var(--tw-leading, var(--text-5xl--line-height));
+    }
+    .sm\:text-6xl {
+      font-size: var(--text-6xl);
+      line-height: var(--tw-leading, var(--text-6xl--line-height));
     }
     .sm\:text-sm {
       font-size: var(--text-sm);
@@ -2106,6 +2203,9 @@
     .xl\:top-8 {
       top: calc(var(--spacing) * 8);
     }
+    .xl\:block {
+      display: block;
+    }
     .xl\:grid-cols-2 {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -2115,6 +2215,9 @@
     .xl\:grid-cols-4 {
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
+    .xl\:grid-cols-5 {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
     .xl\:grid-cols-10 {
       grid-template-columns: repeat(10, minmax(0, 1fr));
     }
@@ -2123,6 +2226,9 @@
     }
     .xl\:grid-cols-\[24rem_minmax\(0\,1fr\)\] {
       grid-template-columns: 24rem minmax(0,1fr);
+    }
+    .xl\:grid-cols-\[28rem_minmax\(0\,1fr\)\] {
+      grid-template-columns: 28rem minmax(0,1fr);
     }
     .xl\:flex-row {
       flex-direction: row;

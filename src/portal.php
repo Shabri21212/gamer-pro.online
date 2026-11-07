@@ -1,15 +1,15 @@
 <?php
 declare(strict_types=1);
 
-foreach (['shifts', 'handover', 'club', 'guests', 'rules', 'exams', 'manage'] as $part) {
+foreach (['shifts', 'handover', 'club', 'guests', 'rules', 'exams', 'manage', 'bar'] as $part) {
     require __DIR__ . '/pages/' . $part . '.php';
     require __DIR__ . '/actions/' . $part . '.php';
 }
 
 final class Portal
 {
-    use PagesShifts, PagesHandover, PagesClub, PagesGuests, PagesRules, PagesExams, PagesManage;
-    use ActionsShifts, ActionsHandover, ActionsClub, ActionsGuests, ActionsRules, ActionsExams, ActionsManage;
+    use PagesShifts, PagesHandover, PagesClub, PagesGuests, PagesRules, PagesExams, PagesManage, PagesBar;
+    use ActionsShifts, ActionsHandover, ActionsClub, ActionsGuests, ActionsRules, ActionsExams, ActionsManage, ActionsBar;
 
     /** path => [метод, право] */
     private const ROUTES = [
@@ -39,6 +39,8 @@ final class Portal
         '/manage/accounts' => ['pageAccounts', 'owner'],
         '/manage/exams' => ['pageManageExams', 'exams.manage'],
         '/manage/database' => ['pageDatabase', 'owner'],
+        '/manage/langame' => ['pageLangame', 'owner'],
+        '/bar' => ['pageBar', null],
     ];
 
     private const ACTIONS = [
@@ -85,6 +87,11 @@ final class Portal
         'delete_employee' => 'doDeleteEmployee',
         'assign_grade' => 'doAssignGrade',
         'save_grade' => 'doSaveGrade',
+        'save_langame' => 'doSaveLangame',
+        'test_langame' => 'doTestLangame',
+        'sync_langame' => 'doSyncLangame',
+        'link_langame_staff' => 'doLinkLangameStaff',
+        'forget_langame_token' => 'doForgetLangameToken',
         'delete_grade' => 'doDeleteGrade',
         'save_account' => 'doSaveAccount',
         'update_access' => 'doUpdateAccess',
@@ -734,7 +741,7 @@ final class Portal
         $branches = implode(' · ', array_map(static fn ($b) => $b['name'], self::branches()));
         $html = '<main id="main" class="grid min-h-dvh lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">';
         $html .= '<div class="relative hidden overflow-hidden bg-sidebar text-sidebar-accent-foreground lg:block">';
-        $html .= '<img src="' . h(asset('img/club-hall.webp')) . '" alt="" class="absolute inset-0 size-full object-cover opacity-75" width="768" height="1376" fetchpriority="high">';
+        $html .= '<img src="' . h(asset('img/club/hall-row.webp')) . '" srcset="' . h(asset('img/club/hall-row-sm.webp')) . ' 800w, ' . h(asset('img/club/hall-row.webp')) . ' 1600w" sizes="55vw" alt="Игровой зал GAMER PRO: ряд ПК с RGB-подсветкой и кресла" class="absolute inset-0 size-full object-cover opacity-80" fetchpriority="high">';
         $html .= '<div class="absolute inset-0 bg-linear-to-t from-sidebar via-sidebar/40 to-sidebar/10" aria-hidden="true"></div>';
         $html .= '<div class="relative flex h-full flex-col justify-between p-10 xl:p-14">';
         $html .= '<span class="text-sidebar-accent-foreground">' . brand_logo('h-9 w-auto', true) . '</span>';
