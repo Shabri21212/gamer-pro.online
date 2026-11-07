@@ -430,9 +430,13 @@ trait PagesShifts
         $html .= '</div><div class="flex flex-wrap items-center gap-2">';
         $html .= '<div class="hidden flex-wrap items-center gap-1.5 md:flex" aria-label="Обозначения">' . chip('День', 'day', 'sun') . chip('Ночь', 'night', 'moon') . '<span class="inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 text-xs leading-5 font-semibold shift-full text-foreground">' . icon('sun-moon', 'size-3.5') . 'Сутки</span>' . '<span class="inline-flex items-center gap-1 rounded-[5px] border border-dashed border-border px-2 py-0.5 text-xs leading-5 font-semibold text-muted-foreground">' . icon('arrow-up-right', 'size-3.5') . 'В другом клубе</span></div>';
         if ($canEdit) {
+            $html .= '<button type="button" class="' . btn_class('primary', 'sm') . '" data-paint-toggle aria-expanded="false" aria-controls="paint-panel">' . icon('pencil', 'size-4') . 'Быстрое заполнение</button>';
             $html .= '<button type="button" class="' . btn_class('outline', 'sm') . '" data-dialog-open="copy-week">' . icon('copy', 'size-4') . 'Повторить неделю</button>';
         }
         $html .= '</div></div>';
+        if ($canEdit) {
+            $html .= self::paintPanel($branch, $filterEmps);
+        }
 
         $html .= '<div class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Показать смены сотрудника">';
         $html .= '<button type="button" class="filter-chip" data-emp-filter="" aria-pressed="true">Все</button>';
@@ -504,14 +508,14 @@ trait PagesShifts
 
         $body = '<div class="flex flex-col gap-2" data-existing></div>';
         if ($canEdit) {
-            $body .= form_open('save_shift', 'class="flex flex-col gap-4 border-t border-border pt-4" data-day-form') . hidden('branchId', $branch['id']) . '<input type="hidden" name="date" value="" data-dialog-date>';
-            $body .= '<p class="text-sm font-semibold">Поставить в смену · ' . h($branch['name']) . '</p>';
-            $body .= ui_field('Сотрудник', ui_select('employeeId', self::employeeOptions(null, $branch['id']), null, 'required'), 'Сотрудник другого филиала встанет как подмена.');
-            $body .= '<fieldset class="flex flex-col gap-1.5"><legend class="mb-1.5 text-sm font-medium">Смена</legend><div class="grid grid-cols-3 gap-2">';
-            foreach (SHIFT_TYPES as $i => $t) {
-                $body .= '<label class="radio-card"><input type="radio" name="shiftType" value="' . $t . '"' . ($i === 0 ? ' checked' : '') . ' class="peer sr-only"><span>' . icon(SHIFT_ICONS[$t], 'size-4') . h(SHIFT_LABELS[$t]) . '<small>' . h(SHIFT_HINTS[$t]) . '</small></span></label>';
-            }
-            $body .= '</div></fieldset><div class="flex flex-wrap justify-end gap-2"><button type="button" class="' . btn_class('ghost') . '" data-dialog-close>Отмена</button><button class="' . btn_class() . '">' . icon('plus', 'size-4') . 'Поставить</button></div></form>';
+            $opts = ['0' => '— никого —'] + self::employeeOptions(null, $branch['id']);
+            $body .= form_open('save_day', 'class="flex flex-col gap-4 border-t border-border pt-4" data-day-form') . hidden('branchId', $branch['id']) . '<input type="hidden" name="date" value="" data-dialog-date>';
+            $body .= '<p class="text-sm font-semibold">Поставить на этот день · ' . h($branch['name']) . '</p>';
+            $body .= '<div class="grid gap-3 sm:grid-cols-2">';
+            $body .= ui_field('<span class="inline-flex items-center gap-1.5">' . icon('sun', 'size-4 text-day-strong') . 'Днём · 08–20</span>', ui_select('dayEmployeeId', $opts, '0', 'data-day-slot="day"'));
+            $body .= ui_field('<span class="inline-flex items-center gap-1.5">' . icon('moon', 'size-4 text-night-strong') . 'Ночью · 20–08</span>', ui_select('nightEmployeeId', $opts, '0', 'data-day-slot="night"'));
+            $body .= '</div><p class="text-xs leading-relaxed text-muted-foreground">Один и тот же сотрудник днём и ночью — встанет на сутки. Сотрудник другого филиала встанет как подмена.</p>';
+            $body .= '<div class="flex flex-wrap justify-end gap-2"><button type="button" class="' . btn_class('ghost') . '" data-dialog-close>Отмена</button><button class="' . btn_class() . '">' . icon('check', 'size-4') . 'Сохранить день</button></div></form>';
         }
         $html .= dialog_html('day-dialog', 'Смены дня', $body, 'max-w-md', 'data-day-dialog');
 
@@ -525,6 +529,48 @@ trait PagesShifts
             $html .= dialog_html('copy-week', 'Повторить неделю', $cw, 'max-w-lg');
         }
         self::layout($user, $html, ['title' => 'График смен', 'width' => 'wide']);
+    }
+
+    /** Панель «кисти»: выбрал сотрудника и смену — тыкаешь по дням, всё сохраняется одной кнопкой. */
+    private static function paintPanel(array $branch, array $emps): string
+    {
+        $html = '<section id="paint-panel" class="sticky top-2 z-20 flex flex-col gap-3 rounded-lg border border-primary/50 bg-card p-4 shadow-lg" data-paint-panel hidden aria-label="Быстрое заполнение графика">';
+        $html .= '<div class="flex flex-wrap items-start justify-between gap-2"><div class="flex flex-col gap-0.5"><h3 class="text-sm font-semibold">Быстрое заполнение</h3>';
+        $html .= '<p class="text-xs leading-relaxed text-pretty text-muted-foreground">Выберите сотрудника и смену, затем нажимайте на дни. Повторное нажатие убирает смену. Сохраняется всё разом.</p></div>';
+        $html .= '<button type="button" class="' . btn_class('quiet', 'icon-sm') . '" data-paint-cancel aria-label="Закрыть без сохранения">' . icon('x', 'size-4') . '</button></div>';
+
+        $html .= '<div class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Сотрудник">';
+        $first = true;
+        foreach ($emps as $id => $name) {
+            $html .= '<button type="button" class="filter-chip paint-emp" data-paint-emp="' . (int) $id . '" data-name="' . h($name) . '" data-short="' . h(short_name($name)) . '" aria-pressed="' . ($first ? 'true' : 'false') . '">' . h(short_name($name)) . '</button>';
+            $first = false;
+        }
+        $others = self::employeeOptions(null, $branch['id']);
+        unset($others[$branch['name']]);
+        if ($others) {
+            $html .= '<select class="' . h(select_class('h-8 w-auto shrink-0 text-xs')) . '" data-paint-other aria-label="Сотрудник другого филиала"><option value="">Другой филиал…</option>';
+            foreach ($others as $group => $list) {
+                if (!is_array($list)) {
+                    continue;
+                }
+                $html .= '<optgroup label="' . h((string) $group) . '">';
+                foreach ($list as $v => $l) {
+                    $html .= '<option value="' . (int) $v . '" data-name="' . h((string) $l) . '" data-short="' . h(short_name((string) $l)) . '">' . h((string) $l) . '</option>';
+                }
+                $html .= '</optgroup>';
+            }
+            $html .= '</select>';
+        }
+        $html .= '</div>';
+
+        $html .= '<div class="flex flex-wrap items-center justify-between gap-3"><div class="flex gap-2" role="group" aria-label="Смена">';
+        foreach (SHIFT_TYPES as $i => $t) {
+            $html .= '<button type="button" class="filter-chip paint-type" data-paint-type="' . $t . '" data-hint="' . h(SHIFT_LABELS[$t] . ' · ' . SHIFT_HINTS[$t]) . '" aria-pressed="' . ($i === 0 ? 'true' : 'false') . '">' . icon(SHIFT_ICONS[$t], 'size-3.5') . h(SHIFT_LABELS[$t]) . '</button>';
+        }
+        $html .= '</div>' . form_open('save_shifts_bulk', 'class="flex items-center gap-3" data-paint-form') . hidden('branchId', $branch['id']) . '<input type="hidden" name="ops" value="" data-paint-ops>';
+        $html .= '<span class="text-xs text-muted-foreground tabular-nums" data-paint-count aria-live="polite">Изменений нет</span>';
+        $html .= '<button class="' . btn_class('primary', 'sm') . '" data-paint-save disabled>' . icon('check', 'size-4') . 'Сохранить</button></form></div>';
+        return $html . '</section>';
     }
 
     /* ---------------- Чистка ---------------- */
@@ -563,7 +609,7 @@ trait PagesShifts
             }
         }
 
-        $html = page_head('Чистка клавиатур', 'Каждое место чистится раз в неделю. Нажмите на место после чистки — отметка сохранится за вами.', self::branchSwitch('/cleaning', $branch, ['w' => $week]));
+        $html = page_head('Чистка клавиатур', 'Каждое место чистится раз в неделю. Нажми��е на место после чистки — отметка сохранится за вами.', self::branchSwitch('/cleaning', $branch, ['w' => $week]));
         $html .= '<div class="flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-2">';
         $html .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/cleaning', ['branch' => $branch['slug'], 'w' => add_days($week, -7)])) . '" aria-label="Предыдущая неделя">' . icon('chevronleft') . '</a>';
         $html .= '<h2 class="min-w-44 text-center font-display text-lg font-semibold tracking-tight">' . h(week_label($week)) . '</h2>';

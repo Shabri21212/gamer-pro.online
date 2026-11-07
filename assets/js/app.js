@@ -420,6 +420,17 @@
         title.textContent = dayN && mon ? "Смена · " + dayN + " " + MONTHS[mon - 1] : "Смена · " + key;
       }
       if (dateInp) dateInp.value = key;
+      var slots = { day: "0", night: "0" };
+      cell.querySelectorAll("[data-emp]:not([data-away])").forEach(function (el) {
+        var t = el.getAttribute("data-type");
+        var id = el.getAttribute("data-emp");
+        if (t === "day" || t === "full") slots.day = id;
+        if (t === "night" || t === "full") slots.night = id;
+      });
+      dlg.querySelectorAll("[data-day-slot]").forEach(function (sel) {
+        var want = slots[sel.getAttribute("data-day-slot")] || "0";
+        sel.value = sel.querySelector('option[value="' + want + '"]') ? want : "0";
+      });
       if (existing) {
         existing.innerHTML = "";
         cell.querySelectorAll("[data-emp]").forEach(function (el) {
@@ -464,23 +475,191 @@
       dlg.showModal();
     }
 
+    /* ---- Быстрое заполнение «кистью» ---- */
+    var painting = false;
+    var pending = {};
+    var touched = {};
+    var paintPanel = document.querySelector("[data-paint-panel]");
+    var paintToggle = document.querySelector("[data-paint-toggle]");
+    var paintEmp = null;
+    var paintType = "day";
+    var TONES = { day: "bg-day text-day-foreground", night: "bg-night text-night-foreground", full: "shift-full text-foreground" };
+
+    function pickEmp(src) {
+      paintEmp = src ? { id: src.getAttribute("data-paint-emp") || src.value, name: src.getAttribute("data-name") || "", short: src.getAttribute("data-short") || "" } : null;
+    }
+    function pressed(sel, el) {
+      document.querySelectorAll(sel).forEach(function (b) {
+        b.setAttribute("aria-pressed", b === el ? "true" : "false");
+      });
+    }
+    function typeIcon(t) {
+      var b = document.querySelector('[data-paint-type="' + t + '"] svg');
+      return b ? b.outerHTML.replace(/class="[^"]*"/, 'class="cal-chip-icon size-4"') : "";
+    }
+    function renderCell(cell) {
+      var key = cell.getAttribute("data-date-key");
+      cell.querySelectorAll("[data-pending]").forEach(function (n) {
+        n.remove();
+      });
+      cell.querySelectorAll(".is-removing").forEach(function (n) {
+        n.classList.remove("is-removing");
+      });
+      var box = cell.querySelector(".cal-shifts");
+      var hasPending = false;
+      Object.keys(pending).forEach(function (k) {
+        var p = pending[k];
+        if (p.d !== key) return;
+        hasPending = true;
+        var ex = cell.querySelector('[data-emp="' + p.e + '"]:not([data-away]) .cal-chip');
+        if (ex) ex.classList.add("is-removing");
+        if (p.op !== "add") return;
+        var wrap = document.createElement("div");
+        wrap.className = "min-w-0";
+        wrap.setAttribute("data-pending", "");
+        wrap.setAttribute("data-emp", p.e);
+        wrap.setAttribute("data-emp-name", p.name);
+        wrap.setAttribute("data-type", p.t);
+        wrap.setAttribute("data-weight", p.t === "full" ? "2" : "1");
+        var chip = document.createElement("span");
+        chip.className = "cal-chip is-pending " + TONES[p.t];
+        chip.innerHTML = typeIcon(p.t) + '<span class="cal-chip-body"><span class="cal-chip-name"><span class="cal-name-short"></span><span class="cal-name-full"></span></span><span class="cal-hint"></span></span>';
+        chip.querySelector(".cal-name-short").textContent = p.short;
+        chip.querySelector(".cal-name-full").textContent = p.name;
+        chip.querySelector(".cal-hint").textContent = p.hint;
+        wrap.appendChild(chip);
+        box.appendChild(wrap);
+      });
+      var empty = cell.querySelector(".cal-empty");
+      if (empty) empty.classList.toggle("hidden", hasPending);
+      if (empFilter) applyFilter();
+    }
+    function syncPaint() {
+      var ops = Object.keys(pending).map(function (k) {
+        var p = pending[k];
+        return p.op === "add" ? { op: "add", d: p.d, e: Number(p.e), t: p.t } : { op: "remove", d: p.d, e: Number(p.e) };
+      });
+      var n = ops.length;
+      var count = document.querySelector("[data-paint-count]");
+      var opsInp = document.querySelector("[data-paint-ops]");
+      var save = document.querySelector("[data-paint-save]");
+      if (count) count.textContent = n ? n + " " + plural(n, "изменение", "изменения", "изменений") : "Изменений нет";
+      if (opsInp) opsInp.value = JSON.stringify(ops);
+      if (save) save.disabled = n === 0;
+    }
+    function plural(n, one, few, many) {
+      var m10 = n % 10;
+      var m100 = n % 100;
+      if (m10 === 1 && m100 !== 11) return one;
+      if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+      return many;
+    }
+    function blocked(cell) {
+      cell.classList.remove("is-blocked");
+      void cell.offsetWidth;
+      cell.classList.add("is-blocked");
+    }
+    function paintCell(cell) {
+      var key = cell.getAttribute("data-date-key");
+      if (!paintEmp || !paintEmp.id) return blocked(cell);
+      if (cell.querySelector('[data-away][data-emp="' + paintEmp.id + '"]')) return blocked(cell);
+      var k = key + "|" + paintEmp.id;
+      var typeBtn = document.querySelector('[data-paint-type="' + paintType + '"]');
+      var ex = cell.querySelector('[data-emp="' + paintEmp.id + '"]:not([data-away]):not([data-pending])');
+      if (pending[k] && (pending[k].op === "remove" || pending[k].t === paintType)) {
+        delete pending[k];
+      } else if (ex && ex.getAttribute("data-type") === paintType) {
+        pending[k] = { op: "remove", d: key, e: paintEmp.id };
+      } else {
+        pending[k] = { op: "add", d: key, e: paintEmp.id, t: paintType, name: paintEmp.name, short: paintEmp.short, hint: typeBtn ? typeBtn.getAttribute("data-hint") : "" };
+      }
+      touched[key] = cell;
+      renderCell(cell);
+      syncPaint();
+    }
+    function setPainting(onOff) {
+      painting = onOff;
+      grid.classList.toggle("is-painting", onOff);
+      if (paintPanel) paintPanel.hidden = !onOff;
+      if (paintToggle) {
+        paintToggle.setAttribute("aria-expanded", onOff ? "true" : "false");
+        paintToggle.hidden = onOff;
+      }
+      if (onOff) {
+        selected = null;
+        paintRange();
+      }
+    }
+    if (paintPanel) {
+      pickEmp(paintPanel.querySelector('[data-paint-emp][aria-pressed="true"]'));
+      on(paintToggle, "click", function () {
+        setPainting(true);
+      });
+      paintPanel.querySelectorAll("[data-paint-emp]").forEach(function (b) {
+        on(b, "click", function () {
+          pressed("[data-paint-emp]", b);
+          var other = paintPanel.querySelector("[data-paint-other]");
+          if (other) other.value = "";
+          pickEmp(b);
+        });
+      });
+      var otherSel = paintPanel.querySelector("[data-paint-other]");
+      on(otherSel, "change", function () {
+        var opt = otherSel.options[otherSel.selectedIndex];
+        if (!otherSel.value) return;
+        pressed("[data-paint-emp]", null);
+        paintEmp = { id: otherSel.value, name: opt.getAttribute("data-name") || "", short: opt.getAttribute("data-short") || "" };
+      });
+      paintPanel.querySelectorAll("[data-paint-type]").forEach(function (b) {
+        on(b, "click", function () {
+          pressed("[data-paint-type]", b);
+          paintType = b.getAttribute("data-paint-type") || "day";
+        });
+      });
+      on(paintPanel.querySelector("[data-paint-cancel]"), "click", function () {
+        if (Object.keys(pending).length && !window.confirm("Закрыть без сохранения? Изменения пропадут.")) return;
+        pending = {};
+        Object.keys(touched).forEach(function (k) {
+          renderCell(touched[k]);
+        });
+        touched = {};
+        syncPaint();
+        setPainting(false);
+      });
+      var paintForm = paintPanel.querySelector("[data-paint-form]");
+      on(paintForm, "submit", function () {
+        pending = {};
+      });
+      on(window, "beforeunload", function (e) {
+        if (!Object.keys(pending).length) return;
+        e.preventDefault();
+        e.returnValue = "";
+      });
+    }
+
     var finePointer = window.matchMedia && window.matchMedia("(pointer: fine)").matches;
     grid.querySelectorAll("[data-date-key]").forEach(function (cell) {
       on(cell, "keydown", function (e) {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          openDay(cell);
+          if (painting) paintCell(cell);
+          else openDay(cell);
         }
       });
       if (!finePointer) {
         on(cell, "click", function () {
-          openDay(cell);
+          if (painting) paintCell(cell);
+          else openDay(cell);
         });
         return;
       }
       on(cell, "mousedown", function (e) {
         if (e.button !== 0) return;
         e.preventDefault();
+        if (painting) {
+          paintCell(cell);
+          return;
+        }
         drag = {
           anchor: cell.getAttribute("data-date-key"),
           cell: cell,

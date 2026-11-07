@@ -46,6 +46,8 @@ final class Portal
         'uncomplete_task' => 'doUncompleteTask',
         'save_handover' => 'doSaveHandover',
         'save_shift' => 'doSaveShift',
+        'save_day' => 'doSaveDay',
+        'save_shifts_bulk' => 'doSaveShiftsBulk',
         'delete_shift' => 'doDeleteShift',
         'copy_week' => 'doCopyWeek',
         'toggle_clean' => 'doToggleClean',

@@ -160,7 +160,7 @@ function confirm_attr(string $message): string
     return 'data-confirm="' . h($message) . '"';
 }
 
-/** Подпись + поле внутри одного <label>, чтобы клик по подписи фокусировал поле. */
+/** Подпись + поле внутри ��дного <label>, чтобы клик по подписи фокусировал поле. */
 function ui_field(string $label, string $control, string $hint = '', string $class = ''): string
 {
     $html = '<label class="flex min-w-0 flex-col gap-1.5 ' . h($class) . '"><span class="text-sm font-medium text-foreground">' . h($label) . '</span>' . $control;
@@ -316,17 +316,16 @@ function shift_chip(array $shift, array $opts = []): string
     if ($mine && !$away) {
         $cls .= ' ring-2 ring-primary ring-offset-1 ring-offset-card';
     }
-    $html = '<span class="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs leading-tight font-semibold ' . $cls . '" title="' . h($name . ' · ' . ($away ? 'в другом клубе: ' . $shift['awayAtBranchName'] : (SHIFT_LABELS[$type] ?? $type) . ' ' . (SHIFT_HINTS[$type] ?? ''))) . '">';
-    $html .= icon($away ? 'arrow-up-right' : (SHIFT_ICONS[$type] ?? 'sun'), 'size-3.5 shrink-0');
-    $html .= '<span class="min-w-0 truncate"><span class="cal-name-short">' . h(short_name($name)) . '</span><span class="cal-name-full">' . h($name) . '</span></span>';
+    $hint = $away ? 'в клубе ' . $shift['awayAtBranchName'] : (SHIFT_LABELS[$type] ?? $type) . ' · ' . (SHIFT_HINTS[$type] ?? '');
+    $html = '<span class="cal-chip ' . $cls . '" title="' . h($name . ' · ' . $hint) . '">';
+    $html .= icon($away ? 'arrow-up-right' : (SHIFT_ICONS[$type] ?? 'sun'), 'cal-chip-icon size-4');
+    $html .= '<span class="cal-chip-body"><span class="cal-chip-name"><span class="cal-name-short">' . h(short_name($name)) . '</span><span class="cal-name-full">' . h($name) . '</span></span>';
+    $html .= '<span class="cal-hint' . ($away ? ' is-always' : '') . '">' . h($hint) . '</span></span>';
     if ($mine) {
         $html .= '<span class="sr-only">(вы)</span>';
     }
     if (!empty($shift['guestFromBranchName'])) {
-        $html .= '<span class="ml-auto shrink-0 rounded-sm bg-current/10 px-1 text-[10px] font-bold uppercase">' . h(mb_substr((string) $shift['guestFromBranchName'], 0, 3)) . '</span>';
-    }
-    if ($away) {
-        $html .= '<span class="cal-kind ml-auto shrink-0 text-[10px] font-semibold">→ ' . h(mb_substr((string) $shift['awayAtBranchName'], 0, 3)) . '</span>';
+        $html .= '<span class="cal-badge" title="Подмена из филиала ' . h((string) $shift['guestFromBranchName']) . '">' . h(mb_substr((string) $shift['guestFromBranchName'], 0, 3)) . '</span>';
     }
     return $html . '</span>';
 }
