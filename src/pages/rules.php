@@ -239,24 +239,39 @@ trait PagesRules
         $manage = can($user, 'fines.manage');
         $rules = self::fineRules();
         $eid = (int) ($user['employeeId'] ?? 0);
-        $assigned = $manage
-            ? Db::all('SELECT * FROM employee_fines ORDER BY "createdAt" DESC LIMIT 200')
-            : ($eid ? Db::all('SELECT * FROM employee_fines WHERE "employeeId" = ? ORDER BY "createdAt" DESC LIMIT 100', [$eid]) : []);
-        $actions = $manage ? '<a class="' . btn_class() . '" href="' . h(url_to('/fines/assign')) . '">' . icon('plus', 'size-4') . 'Назначить штраф</a><a class="' . btn_class('outline') . '" href="' . h(url_to('/fines/edit')) . '">' . icon('pencil', 'size-4') . 'Лист штрафов</a>' : '';
-        $html = page_head('Штрафы', 'Лист штрафов клуба: за что и сколько. Повторное нарушение — повышенная сумма.', $actions);
-
-        $monthStart = now_tyumen()->format('Y-m-01');
-        $sumMonth = 0;
-        $sumAll = 0;
-        foreach ($assigned as $r) {
-            $sumAll += (int) $r['amount'];
-            if (substr((string) $r['createdAt'], 0, 10) >= $monthStart) {
-                $sumMonth += (int) $r['amount'];
+        // Штрафы действуют только в месяце назначения: с 1-го числа список обнуляется. Записи не удаляются — управляющий видит архив.
+        $current = now_tyumen()->modify('first day of this month')->setTime(0, 0);
+        $view = $current;
+        $mParam = (string) ($_GET['m'] ?? '');
+        if ($manage && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $mParam)) {
+            $picked = DateTimeImmutable::createFromFormat('!Y-m', $mParam, $current->getTimezone());
+            if ($picked && $picked <= $current) {
+                $view = $picked;
             }
         }
-        $title = $manage ? 'Назначенные штрафы' : 'Ваши штрафы';
-        $meta = $assigned ? 'В этом месяце ' . money_rub($sumMonth) . ' · всего ' . money_rub($sumAll) : ($manage ? 'Пока никому не назначали' : 'У вас нет штрафов — так держать');
-        $list = card_head($title, h($meta), '', 'wallet');
+        $from = $view->format('Y-m-d');
+        $until = $view->modify('+1 month')->format('Y-m-d');
+        $isCurrent = $view == $current;
+        $assigned = $manage
+            ? Db::all('SELECT * FROM employee_fines WHERE "createdAt" >= ? AND "createdAt" < ? ORDER BY "createdAt" DESC', [$from, $until])
+            : ($eid ? Db::all('SELECT * FROM employee_fines WHERE "employeeId" = ? AND "createdAt" >= ? AND "createdAt" < ? ORDER BY "createdAt" DESC', [$eid, $from, $until]) : []);
+        $actions = $manage ? '<a class="' . btn_class() . '" href="' . h(url_to('/fines/assign')) . '">' . icon('plus', 'size-4') . 'Назначить штраф</a><a class="' . btn_class('outline') . '" href="' . h(url_to('/fines/edit')) . '">' . icon('pencil', 'size-4') . 'Лист штрафов</a>' : '';
+        $html = page_head('Штрафы', 'Лист штрафов клуба: за что и сколько. Повторное нарушение — повышенная сумма. Назначенные штрафы обнуляются 1-го числа каждого месяца.', $actions);
+
+        $sumMonth = 0;
+        foreach ($assigned as $r) {
+            $sumMonth += (int) $r['amount'];
+        }
+        $monLabel = mb_strtolower(format_month_title((int) $view->format('Y'), (int) $view->format('n') - 1));
+        $title = $manage ? 'Штрафы · ' . $monLabel : 'Ваши штрафы за ' . $monLabel;
+        $meta = $assigned ? 'Итого ' . money_rub($sumMonth) . ' · ' . plural(count($assigned), 'штраф', 'штрафа', 'штрафов') : ($manage ? 'В этом месяце штрафов нет' : 'В этом месяце штрафов нет — так держать');
+        $nav = '';
+        if ($manage) {
+            $nav = '<div class="flex items-center gap-1"><a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/fines', ['m' => $view->modify('-1 month')->format('Y-m')])) . '" aria-label="Предыдущий месяц">' . icon('chevronleft', 'size-4') . '</a>';
+            $nav .= $isCurrent ? '' : '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/fines', $view->modify('+1 month') == $current ? [] : ['m' => $view->modify('+1 month')->format('Y-m')])) . '" aria-label="Следующий месяц">' . icon('chevronright', 'size-4') . '</a>';
+            $nav .= '</div>';
+        }
+        $list = card_head($title, h($meta), $nav, 'wallet');
         if ($assigned) {
             $list .= '<ul class="mt-4 flex flex-col divide-y divide-border" data-show-more="8">';
             foreach ($assigned as $r) {

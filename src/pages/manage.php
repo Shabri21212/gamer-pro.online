@@ -136,13 +136,7 @@ trait PagesManage
         $monthFrom = $now->format('Y-m-01');
         $grade = $user['gradeId'] ? Db::one('SELECT title, "shiftRate" FROM employee_grades WHERE id = ?', [$user['gradeId']]) : null;
         $units = $eid ? (self::shiftUnits($monthFrom, $now->format('Y-m-t'))[$eid] ?? 0) : 0;
-        $fines = $eid ? Db::all('SELECT reason, amount, "createdAt" FROM employee_fines WHERE "employeeId" = ? ORDER BY "createdAt" DESC LIMIT 50', [$eid]) : [];
-        $finesMonth = 0;
-        foreach ($fines as $f) {
-            if (substr((string) $f['createdAt'], 0, 10) >= $monthFrom) {
-                $finesMonth += (int) $f['amount'];
-            }
-        }
+        $finesMonth = $eid ? (int) Db::value('SELECT COALESCE(SUM(amount), 0) FROM employee_fines WHERE "employeeId" = ? AND "createdAt" >= ?', [$eid, $monthFrom]) : 0;
         $upcoming = $eid ? self::upcomingShiftsFor($eid, 14) : [];
         $xp = self::examXpState(self::examCatalog($user));
 

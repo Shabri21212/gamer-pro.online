@@ -54,39 +54,32 @@ trait ActionsShifts
         return url_to('/schedule', ['branch' => $branch['slug'], 'm' => substr($date, 0, 7)]);
     }
 
-    private static function doSaveShift(array $user): void
+    private static function activeEmployee(int $id): ?array
     {
-        $branch = self::branchById(self::postInt('branchId'));
-        if (!$branch) {
-            self::fail('Филиал не найден', '/schedule');
-        }
-        self::permOrFail($user, 'schedule.edit', $branch['id'], '/schedule');
-        $date = self::postStr('date', 10);
-        $type = self::postStr('shiftType', 16);
-        if (!is_date_key($date)) {
-            self::fail('Не выбрана дата смены', '/schedule');
-        }
-        if (!in_array($type, SHIFT_TYPES, true)) {
-            self::fail('Выберите тип смены: день, ночь или сутки', '/schedule');
-        }
-        $emp = Db::one('SELECT id, name, "homeBranchId", "isActive" FROM employees WHERE id = ?', [self::postInt('employeeId')]);
-        if (!$emp || !boolish($emp['isActive'])) {
-            self::fail('Выберите сотрудника из списка', '/schedule');
-        }
+        $emp = Db::one('SELECT id, name, "homeBranchId", "isActive" FROM employees WHERE id = ?', [$id]);
+        return $emp && boolish($emp['isActive']) ? $emp : null;
+    }
+
+    /**
+     * Ставит сотрудника в смену (или меняет тип его смены в этот день).
+     * Возвращает ['status' => created|updated|same|conflict, 'msg' => string].
+     */
+    private static function placeShift(array $user, array $branch, array $emp, string $date, string $type, bool $log = true): array
+    {
         $name = (string) $emp['name'];
         $busy = Db::one('SELECT id, "branchId", "shiftType" FROM shifts WHERE "employeeId" = ? AND date = ?', [(int) $emp['id'], $date]);
         if ($busy && (int) $busy['branchId'] !== $branch['id']) {
-            self::fail($name . ' в этот день уже стоит в смену в филиале ' . self::branchName((int) $busy['branchId']) . '.', '/schedule');
+            return ['status' => 'conflict', 'msg' => short_name($name) . ' ' . format_day_month($date) . ' уже стоит в филиале ' . self::branchName((int) $busy['branchId'])];
         }
         if ($busy) {
             if ($busy['shiftType'] === $type) {
-                flash_set('ok', $name . ' уже стоит в эту смену');
-                redirect_back('/schedule');
+                return ['status' => 'same', 'msg' => short_name($name) . ' уже стоит в эту смену'];
             }
             Db::exec('UPDATE shifts SET "shiftType" = ?, "updatedAt" = ? WHERE id = ?', [$type, now_iso(), (int) $busy['id']]);
-            audit($user, 'schedule', 'update', 'Смена изменена: ' . self::shiftSummary($name, $type, $date, $branch['name']), self::scheduleHref($branch, $date));
-            flash_set('ok', 'Смена ' . short_name($name) . ' изменена на «' . SHIFT_LABELS[$type] . '»');
-            redirect_back('/schedule');
+            if ($log) {
+                audit($user, 'schedule', 'update', 'Смена изменена: ' . self::shiftSummary($name, $type, $date, $branch['name']), self::scheduleHref($branch, $date));
+            }
+            return ['status' => 'updated', 'msg' => 'Смена ' . short_name($name) . ' изменена на «' . SHIFT_LABELS[$type] . '»'];
         }
         Db::insert('shifts', [
             'date' => $date,
@@ -98,8 +91,160 @@ trait ActionsShifts
             'updatedAt' => now_iso(),
         ]);
         $guest = (int) $emp['homeBranchId'] !== $branch['id'];
-        audit($user, 'schedule', 'create', ($guest ? 'Подмена: ' : 'Поставлен в смену: ') . self::shiftSummary($name, $type, $date, $branch['name']), self::scheduleHref($branch, $date));
-        flash_set('ok', short_name($name) . ($guest ? ' поставлен подменой на ' . $branch['name'] : ' поставлен в смену') . ' · ' . format_day_month($date));
+        if ($log) {
+            audit($user, 'schedule', 'create', ($guest ? 'Подмена: ' : 'Поставлен в смену: ') . self::shiftSummary($name, $type, $date, $branch['name']), self::scheduleHref($branch, $date));
+        }
+        return ['status' => 'created', 'msg' => short_name($name) . ($guest ? ' поставлен подменой на ' . $branch['name'] : ' поставлен в смену') . ' · ' . format_day_month($date)];
+    }
+
+    private static function editableBranch(array $user): array
+    {
+        $branch = self::branchById(self::postInt('branchId'));
+        if (!$branch) {
+            self::fail('Филиал не найден', '/schedule');
+        }
+        self::permOrFail($user, 'schedule.edit', $branch['id'], '/schedule');
+        return $branch;
+    }
+
+    private static function doSaveShift(array $user): void
+    {
+        $branch = self::editableBranch($user);
+        $date = self::postStr('date', 10);
+        $type = self::postStr('shiftType', 16);
+        if (!is_date_key($date)) {
+            self::fail('Не выбрана дата смены', '/schedule');
+        }
+        if (!in_array($type, SHIFT_TYPES, true)) {
+            self::fail('Выберите тип смены: день, ночь или сутки', '/schedule');
+        }
+        $emp = self::activeEmployee(self::postInt('employeeId'));
+        if (!$emp) {
+            self::fail('Выберите сотрудника из списка', '/schedule');
+        }
+        $r = self::placeShift($user, $branch, $emp, $date, $type);
+        flash_set($r['status'] === 'conflict' ? 'error' : 'ok', $r['msg']);
+        redirect_back('/schedule');
+    }
+
+    /** Диалог дня: дневной и ночной сотрудник одним сохранением. Один и тот же человек в обоих — сутки. */
+    private static function doSaveDay(array $user): void
+    {
+        $branch = self::editableBranch($user);
+        $date = self::postStr('date', 10);
+        if (!is_date_key($date)) {
+            self::fail('Не выбрана дата смены', '/schedule');
+        }
+        $dayId = self::postInt('dayEmployeeId');
+        $nightId = self::postInt('nightEmployeeId');
+        $plan = [];
+        if ($dayId > 0 && $dayId === $nightId) {
+            $plan[$dayId] = 'full';
+        } else {
+            if ($dayId > 0) {
+                $plan[$dayId] = 'day';
+            }
+            if ($nightId > 0) {
+                $plan[$nightId] = 'night';
+            }
+        }
+        if (!$plan) {
+            self::fail('Выберите, кто выходит днём или ночью', '/schedule');
+        }
+        $done = [];
+        $errors = [];
+        foreach ($plan as $id => $type) {
+            $emp = self::activeEmployee($id);
+            if (!$emp) {
+                $errors[] = 'Сотрудник не найден';
+                continue;
+            }
+            $r = self::placeShift($user, $branch, $emp, $date, $type);
+            if ($r['status'] === 'conflict') {
+                $errors[] = $r['msg'];
+            } else {
+                $done[] = short_name((string) $emp['name']) . ' — ' . mb_strtolower(SHIFT_LABELS[$type]);
+            }
+        }
+        if ($errors) {
+            flash_set('error', implode('. ', $errors) . ($done ? '. Сохранено: ' . implode(', ', $done) : ''));
+        } else {
+            flash_set('ok', format_day_month($date) . ': ' . implode(', ', $done));
+        }
+        redirect_back('/schedule');
+    }
+
+    /** «Кисть»: пачка изменений графика за один запрос. ops — JSON [{d, e, t, op: add|remove}]. */
+    private static function doSaveShiftsBulk(array $user): void
+    {
+        $branch = self::editableBranch($user);
+        $ops = json_decode((string) ($_POST['ops'] ?? ''), true);
+        if (!is_array($ops) || !$ops) {
+            self::fail('Нет изменений для сохранения', '/schedule');
+        }
+        if (count($ops) > 400) {
+            self::fail('Слишком много изменений за раз — сохраните частями', '/schedule');
+        }
+        $emps = [];
+        $res = Db::tx(static function () use ($ops, $user, $branch, &$emps): array {
+            $res = ['added' => 0, 'removed' => 0, 'conflicts' => []];
+            foreach ($ops as $op) {
+                if (!is_array($op)) {
+                    continue;
+                }
+                $date = (string) ($op['d'] ?? '');
+                $eid = (int) ($op['e'] ?? 0);
+                if (!is_date_key($date) || $eid < 1) {
+                    continue;
+                }
+                if (($op['op'] ?? '') === 'remove') {
+                    $row = Db::one('SELECT id FROM shifts WHERE "employeeId" = ? AND date = ? AND "branchId" = ?', [$eid, $date, $branch['id']]);
+                    if ($row) {
+                        Db::exec('DELETE FROM shifts WHERE id = ?', [(int) $row['id']]);
+                        $res['removed']++;
+                    }
+                    continue;
+                }
+                $type = (string) ($op['t'] ?? '');
+                if (!in_array($type, SHIFT_TYPES, true)) {
+                    continue;
+                }
+                $emps[$eid] ??= self::activeEmployee($eid);
+                if (!$emps[$eid]) {
+                    continue;
+                }
+                $r = self::placeShift($user, $branch, $emps[$eid], $date, $type, false);
+                if ($r['status'] === 'conflict') {
+                    $res['conflicts'][] = $r['msg'];
+                } elseif ($r['status'] !== 'same') {
+                    $res['added']++;
+                }
+            }
+            return $res;
+        });
+        $parts = [];
+        if ($res['added']) {
+            $parts[] = 'поставлено ' . plural($res['added'], 'смена', 'смены', 'смен');
+        }
+        if ($res['removed']) {
+            $parts[] = 'убрано ' . $res['removed'];
+        }
+        $month = '';
+        foreach ($ops as $op) {
+            if (is_array($op) && is_date_key((string) ($op['d'] ?? ''))) {
+                $month = (string) $op['d'];
+                break;
+            }
+        }
+        if ($parts) {
+            $who = implode(', ', array_map(static fn ($e) => short_name((string) $e['name']), array_filter($emps)));
+            audit($user, 'schedule', 'bulk', 'Быстрое заполнение · ' . $branch['name'] . ': ' . implode(', ', $parts) . ($who !== '' ? ' · ' . $who : ''), $month !== '' ? self::scheduleHref($branch, $month) : url_to('/schedule'));
+        }
+        $msg = $parts ? 'Сохранено: ' . implode(', ', $parts) : 'Изменений нет';
+        if ($res['conflicts']) {
+            $msg .= '. Пропущено ' . count($res['conflicts']) . ': ' . implode('; ', array_slice($res['conflicts'], 0, 3)) . (count($res['conflicts']) > 3 ? '…' : '');
+        }
+        flash_set($res['conflicts'] && !$parts ? 'error' : 'ok', $msg);
         redirect_back('/schedule');
     }
 
