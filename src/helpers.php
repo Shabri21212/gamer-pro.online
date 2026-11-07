@@ -68,6 +68,7 @@ const DEFAULT_REVIEW_PROMO = [
 const NAV_GROUPS = [
     ['id' => 'shifts', 'label' => 'Смены', 'items' => [
         ['href' => '/', 'label' => 'Мой день', 'icon' => 'home'],
+        ['href' => '/shift', 'label' => 'Приём и сдача', 'icon' => 'clipboard-check'],
         ['href' => '/schedule', 'label' => 'График смен', 'icon' => 'calendar'],
         ['href' => '/cleaning', 'label' => 'Чистка клавиатур', 'icon' => 'keyboard'],
         ['href' => '/manage/tasks', 'label' => 'Задания на смены', 'icon' => 'clipboard-list', 'perm' => 'tasks.assign'],

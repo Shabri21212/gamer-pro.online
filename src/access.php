@@ -118,6 +118,7 @@ function perm_scope(array $user, string $perm): ?int
 
 const AUDIT_ENTITIES = [
     'schedule' => 'График',
+    'handover' => 'Приём и сдача',
     'tasks' => 'Задания',
     'cleaning' => 'Чистка',
     'issues' => 'Поломки',

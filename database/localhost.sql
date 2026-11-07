@@ -1,5 +1,5 @@
 -- GAMER PRO CRM · база данных для MySQL 8 / MariaDB
--- Создано: 07.11.2026 20:38 (Екатеринбург) · источник: gamerpro.sqlite
+-- Создано: 08.11.2026 00:41 (Екатеринбург) · источник: gamerpro.sqlite
 --
 -- Как залить на reg.ru: phpMyAdmin → слева выбрать базу (например u3622481_default) → вкладка «Импорт»
 -- → выбрать этот файл → «Вперёд». Затем в config.php на хостинге указать доступы к этой базе.
@@ -20,7 +20,7 @@ CREATE TABLE `app_meta` (
   PRIMARY KEY (`k`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-INSERT INTO `app_meta` (`k`, `v`) VALUES ('schema', '5');
+INSERT INTO `app_meta` (`k`, `v`) VALUES ('schema', '6');
 
 -- --------------------------------------------------------
 -- Таблица `user`
@@ -1294,7 +1294,9 @@ CREATE TABLE `shift_reports` (
   `cashActual` int DEFAULT NULL,
   `noteForNext` text DEFAULT NULL,
   `createdAt` varchar(40) DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `shift_reports_shift_uq` (`branchId`,`date`,`shiftType`,`phase`),
+  KEY `shift_reports_date_idx` (`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 INSERT INTO `shift_reports` (`id`, `branchId`, `date`, `shiftType`, `phase`, `userId`, `userName`, `cashExpected`, `cashActual`, `noteForNext`, `createdAt`) VALUES
@@ -1313,7 +1315,8 @@ CREATE TABLE `shift_report_checks` (
   `itemId` int DEFAULT NULL,
   `done` tinyint(1) NOT NULL DEFAULT 0,
   `comment` text DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `shift_report_checks_report_idx` (`reportId`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 INSERT INTO `shift_report_checks` (`id`, `reportId`, `itemId`, `done`, `comment`) VALUES

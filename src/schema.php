@@ -15,7 +15,7 @@ declare(strict_types=1);
  * Индексы: имя => 'колонка,колонка'; «!» в начале — уникальный.
  * Все строковые колонки в MySQL — utf8mb4_bin: сравнение и сортировка как в SQLite.
  */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 const SCHEMA = [
     'app_meta' => [
@@ -209,9 +209,11 @@ const SCHEMA = [
             'id' => 'pk', 'branchId' => 'int', 'date' => 'date', 'shiftType' => 'str:16', 'phase' => 'str:16', 'userId' => 'uid',
             'userName' => 'str:191', 'cashExpected' => 'int', 'cashActual' => 'int', 'noteForNext' => 'text', 'createdAt' => 'ts',
         ],
+        'indexes' => ['shift' => '!branchId,date,shiftType,phase', 'date' => 'date'],
     ],
     'shift_report_checks' => [
         'columns' => ['id' => 'pk', 'reportId' => 'int', 'itemId' => 'int', 'done' => 'bool=0', 'comment' => 'text'],
+        'indexes' => ['report' => 'reportId'],
     ],
     'audit_log' => [
         'columns' => [

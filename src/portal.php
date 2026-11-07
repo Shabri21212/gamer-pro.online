@@ -1,19 +1,20 @@
 <?php
 declare(strict_types=1);
 
-foreach (['shifts', 'club', 'guests', 'rules', 'exams', 'manage'] as $part) {
+foreach (['shifts', 'handover', 'club', 'guests', 'rules', 'exams', 'manage'] as $part) {
     require __DIR__ . '/pages/' . $part . '.php';
     require __DIR__ . '/actions/' . $part . '.php';
 }
 
 final class Portal
 {
-    use PagesShifts, PagesClub, PagesGuests, PagesRules, PagesExams, PagesManage;
-    use ActionsShifts, ActionsClub, ActionsGuests, ActionsRules, ActionsExams, ActionsManage;
+    use PagesShifts, PagesHandover, PagesClub, PagesGuests, PagesRules, PagesExams, PagesManage;
+    use ActionsShifts, ActionsHandover, ActionsClub, ActionsGuests, ActionsRules, ActionsExams, ActionsManage;
 
     /** path => [метод, право] */
     private const ROUTES = [
         '/' => ['pageHome', null],
+        '/shift' => ['pageHandover', null],
         '/schedule' => ['pageSchedule', null],
         '/cleaning' => ['pageCleaning', null],
         '/issues' => ['pageIssues', null],
@@ -43,6 +44,7 @@ final class Portal
     private const ACTIONS = [
         'complete_task' => 'doCompleteTask',
         'uncomplete_task' => 'doUncompleteTask',
+        'save_handover' => 'doSaveHandover',
         'save_shift' => 'doSaveShift',
         'delete_shift' => 'doDeleteShift',
         'copy_week' => 'doCopyWeek',
