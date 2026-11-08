@@ -41,9 +41,9 @@ trait PagesHandover
         $rows = Db::all(
             'SELECT s.id, s.date, s."branchId", b.name AS "branchName", b.slug AS "branchSlug", s."shiftType", s."employeeId"
              FROM shifts s JOIN branches b ON b.id = s."branchId"
-             WHERE s."employeeId" = ? AND s.date >= ? AND s.date <= ?
+             WHERE s."employeeId" = ? AND s.date >= ? AND s.date < ?
              ORDER BY s.date',
-            [(int) $eid, $now->modify('-1 day')->format('Y-m-d'), $now->modify('+1 day')->format('Y-m-d')],
+            [(int) $eid, $now->modify('-1 day')->format('Y-m-d'), $now->modify('+2 days')->format('Y-m-d')],
         );
         $best = null;
         $bestRank = PHP_INT_MAX;

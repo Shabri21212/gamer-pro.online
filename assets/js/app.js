@@ -7,6 +7,33 @@
     if (el) el.addEventListener(ev, fn, opt);
   }
 
+  on(document, "click", function (e) {
+    var opener = e.target.closest("[data-dialog-open]");
+    var closer = e.target.closest("[data-dialog-close]");
+    if (opener) {
+      var dialog = document.getElementById(opener.dataset.dialogOpen);
+      if (dialog && !dialog.open) dialog.showModal();
+    }
+    if (closer) {
+      var parent = closer.closest("dialog");
+      if (parent) parent.close();
+    }
+    var toastClose = e.target.closest("[data-toast-close]");
+    if (toastClose) toastClose.closest("[data-toast]").remove();
+  });
+  document.querySelectorAll("dialog[data-dialog-autoopen]").forEach(function (dialog) { dialog.showModal(); });
+  document.querySelectorAll("form[data-confirm]").forEach(function (form) {
+    on(form, "submit", function (e) {
+      if (!window.confirm(form.dataset.confirm)) e.preventDefault();
+    });
+  });
+  function updateClocks() {
+    var time = new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Yekaterinburg", hour: "2-digit", minute: "2-digit" }).format(new Date());
+    document.querySelectorAll("[data-clock]").forEach(function (clock) { clock.textContent = time; });
+  }
+  updateClocks();
+  if (document.querySelector("[data-clock]")) setInterval(updateClocks, 30000);
+
   document.querySelectorAll("[data-menu]").forEach(function (wrap) {
     var btn = wrap.querySelector("[data-menu-btn]");
     var panel = wrap.querySelector("[data-menu-panel]");
@@ -21,15 +48,32 @@
   });
 
   var drawer = document.querySelector("[data-nav-drawer]");
+  var drawerTrigger = null;
+  function closeDrawer() {
+    if (!drawer) return;
+    drawer.classList.add("hidden");
+    document.body.style.overflow = "";
+    document.querySelectorAll("[data-open-nav]").forEach(function (b) { b.setAttribute("aria-expanded", "false"); });
+    if (drawerTrigger) drawerTrigger.focus();
+  }
   document.querySelectorAll("[data-open-nav]").forEach(function (b) {
     on(b, "click", function () {
-      if (drawer) drawer.classList.remove("hidden");
+      if (!drawer) return;
+      drawerTrigger = b;
+      drawer.classList.remove("hidden");
+      b.setAttribute("aria-expanded", "true");
+      document.body.style.overflow = "hidden";
+      drawer.querySelector('a, button:not([tabindex="-1"])').focus();
     });
   });
-  document.querySelectorAll("[data-close-nav]").forEach(function (b) {
-    on(b, "click", function () {
-      if (drawer) drawer.classList.add("hidden");
-    });
+  document.querySelectorAll("[data-close-nav]").forEach(function (b) { on(b, "click", closeDrawer); });
+  on(drawer, "keydown", function (e) {
+    if (e.key === "Escape") { e.preventDefault(); closeDrawer(); }
+    if (e.key !== "Tab") return;
+    var items = Array.from(drawer.querySelectorAll('a[href], button:not([tabindex="-1"]), input:not([type="hidden"])')).filter(function (el) { return el.getClientRects().length; });
+    var first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
 
   document.querySelectorAll("[data-theme-toggle]").forEach(function (btn) {
@@ -41,6 +85,7 @@
         : '<svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
     }
     sync();
+    on(document, "gp-theme-change", sync);
     on(btn, "click", function () {
       var next = !document.documentElement.classList.contains("dark");
       document.documentElement.classList.toggle("dark", next);
@@ -49,7 +94,9 @@
       try {
         localStorage.setItem("gamerpro-theme", next ? "dark" : "light");
       } catch (e) {}
-      sync();
+      var themeColor = document.querySelector('meta[name="theme-color"]');
+      if (themeColor) themeColor.content = next ? "#161d2a" : "#f5f7fc";
+      document.dispatchEvent(new Event("gp-theme-change"));
     });
   });
 
@@ -58,6 +105,8 @@
       var input = btn.parentElement.querySelector("input");
       if (!input) return;
       input.type = input.type === "password" ? "text" : "password";
+      btn.setAttribute("aria-pressed", input.type === "text" ? "true" : "false");
+      btn.setAttribute("aria-label", input.type === "text" ? "Скрыть пароль" : "Показать пароль");
     });
   });
 
@@ -124,41 +173,50 @@
   on(document.querySelector("[data-review-phone]"), "input", applyReviewPhoneFilter);
   on(document.querySelector("[data-review-filter]"), "input", applyReviewPhoneFilter);
 
-  var loyalty = document.querySelector("[data-loyalty]");
+  var loyalty = document.querySelector("[data-tiers]");
   if (loyalty) {
-    var box = document.querySelector("[data-topup-box]");
-    var selected = null;
-    loyalty.querySelectorAll("[data-tier]").forEach(function (btn) {
-      on(btn, "click", function () {
-        loyalty.querySelectorAll("[data-tier]").forEach(function (b) {
-          b.classList.remove("border-primary", "bg-accent");
-          b.classList.add("border-border", "bg-card");
-        });
-        if (selected === btn) {
-          selected = null;
-          if (box) box.classList.add("hidden");
-          return;
-        }
-        selected = btn;
-        btn.classList.add("border-primary", "bg-accent");
-        btn.classList.remove("border-border");
-        if (box) {
-          box.classList.remove("hidden");
-          box.classList.add("flex");
-          btn.insertAdjacentElement("afterend", box);
-        }
-        calcCash();
+    var tiers = Array.from(loyalty.querySelectorAll("[data-tier]"));
+    var calculator = document.querySelector("[data-cashback-calc]");
+    var topup = calculator.querySelector("[data-topup]");
+    var cashback = calculator.querySelector("[data-cashback]");
+    var selectedTier = tiers.find(function (b) { return b.getAttribute("aria-checked") === "true"; }) || tiers[0];
+    function calcCash() {
+      var raw = topup.value.replace(/\s/g, "").replace(",", ".");
+      var valid = /^\d{1,8}(\.\d{1,2})?$/.test(raw);
+      var amount = valid ? Math.round(Number(raw) * 100) : 0;
+      var percent = Number(selectedTier.dataset.percent);
+      topup.setAttribute("aria-invalid", raw !== "" && !valid ? "true" : "false");
+      cashback.textContent = valid ? Math.floor(amount * percent / 10000).toLocaleString("ru-RU") + " бонусов" : "—";
+      calculator.querySelector("[data-cashback-hint]").textContent = raw !== "" && !valid ? "Введите сумму от 0 до 99 999 999,99 ₽" : "Кэшбек " + percent + "% · округление до целого бонуса";
+    }
+    function selectTier(btn) {
+      selectedTier = btn;
+      tiers.forEach(function (b) {
+        b.setAttribute("aria-checked", b === btn ? "true" : "false");
+        b.tabIndex = b === btn ? 0 : -1;
+      });
+      calculator.querySelector("[data-tier-name]").textContent = btn.dataset.title;
+      calcCash();
+    }
+    tiers.forEach(function (btn, index) {
+      on(btn, "click", function () { selectTier(btn); });
+      on(btn, "keydown", function (e) {
+        var next = index;
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (index + 1) % tiers.length;
+        else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (index + tiers.length - 1) % tiers.length;
+        else if (e.key === "Home") next = 0;
+        else if (e.key === "End") next = tiers.length - 1;
+        else return;
+        e.preventDefault();
+        selectTier(tiers[next]);
+        tiers[next].focus();
       });
     });
-    function calcCash() {
-      var inp = document.querySelector("[data-topup]");
-      var out = document.querySelector("[data-cashback]");
-      if (!inp || !out || !selected) return;
-      var top = Number(String(inp.value).replace(",", ".").replace(/\s/g, "")) || 0;
-      var pct = Number(selected.getAttribute("data-percent") || 0);
-      out.textContent = top > 0 ? Math.floor((top * pct) / 100).toLocaleString("ru-RU") + " ₽" : "—";
-    }
-    on(document.querySelector("[data-topup]"), "input", calcCash);
+    on(topup, "input", calcCash);
+    document.querySelectorAll("[data-topup-preset]").forEach(function (btn) {
+      on(btn, "click", function () { topup.value = btn.dataset.topupPreset; calcCash(); });
+    });
+    selectTier(selectedTier);
   }
 
   var timeCalc = document.querySelector("[data-time-calc]");
@@ -182,9 +240,7 @@
         var i = btn.getAttribute("data-branch-tab");
         document.querySelectorAll("[data-branch-tab]").forEach(function (b) {
           var onb = b === btn;
-          b.classList.toggle("bg-primary", onb);
-          b.classList.toggle("text-primary-foreground", onb);
-          b.classList.toggle("text-muted-foreground", !onb);
+          b.setAttribute("aria-selected", onb ? "true" : "false");
         });
         document.querySelectorAll("[data-branch-panel]").forEach(function (p) {
           p.classList.toggle("hidden", p.getAttribute("data-branch-panel") !== i);
@@ -289,9 +345,7 @@
       document.querySelectorAll("[data-emp-filter]").forEach(function (btn) {
         var on = (btn.getAttribute("data-emp-filter") || "") === empFilter;
         btn.setAttribute("aria-pressed", on ? "true" : "false");
-        btn.classList.toggle("shadow-md", on);
-        btn.classList.toggle("text-foreground", on);
-        btn.classList.toggle("text-muted-foreground", !on);
+        btn.tabIndex = 0;
       });
       if (halfBox && !selected) updateHalf();
       if (selected) paintRange();
@@ -326,15 +380,12 @@
       cells.forEach(function (cell) {
         var key = cell.getAttribute("data-date-key");
         var onr = selected && inRange(key, selected.from, selected.to);
-        cell.classList.toggle("border-primary", !!onr);
-        cell.classList.toggle("bg-primary/15", !!onr);
-        cell.classList.toggle("ring-2", !!onr);
-        cell.classList.toggle("ring-primary/35", !!onr);
+        cell.classList.toggle("is-selected", !!onr);
       });
       if (!selected) {
         if (emptyBox) emptyBox.classList.remove("hidden");
-        if (rangeBox) rangeBox.classList.add("hidden");
-        if (halfBox) halfBox.hidden = false;
+        if (rangeBox) rangeBox.querySelector("[data-range-body]").textContent = "Выберите период кнопками или выделите даты в календаре.";
+        updateHalf();
         return;
       }
       if (emptyBox) emptyBox.classList.add("hidden");
@@ -386,7 +437,7 @@
         rows.forEach(function (r) {
           html +=
             '<li class="bg-muted/50 flex items-center justify-between gap-2 rounded-lg px-3 py-2"><span class="min-w-0 text-sm font-medium" style="overflow-wrap:anywhere">' +
-            r.name +
+            r.name.replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }) +
             '</span><span class="text-lg font-semibold tabular-nums">' +
             r.count +
             '<span class="text-muted-foreground ml-1 text-xs font-normal">' +
@@ -397,7 +448,9 @@
       } else if (total === 0) {
         html += '<p class="text-muted-foreground mt-4 text-sm">В этом периоде смен нет.</p>';
       }
-      rangeBox.innerHTML = html;
+      rangeBox.querySelector("[data-range-body]").innerHTML = html;
+      var summary = rangeBox.closest("details");
+      if (summary) summary.open = true;
     }
 
     function setRange(from, to) {
@@ -640,6 +693,7 @@
     var finePointer = window.matchMedia && window.matchMedia("(pointer: fine)").matches;
     grid.querySelectorAll("[data-date-key]").forEach(function (cell) {
       on(cell, "keydown", function (e) {
+        if (e.isComposing || e.keyCode === 229) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           if (painting) paintCell(cell);
@@ -718,15 +772,10 @@
       }
     });
 
-    document.querySelectorAll("[data-dialog-close]").forEach(function (b) {
-      on(b, "click", function () {
-        var dlg = document.querySelector("[data-day-dialog]");
-        if (dlg && dlg.close) dlg.close();
-      });
-    });
+    updateHalf();
   }
 
-  var flash = document.querySelector("[role=status]");
+  var flash = document.querySelector('[data-toast][role="status"]');
   if (flash) {
     setTimeout(function () {
       flash.remove();

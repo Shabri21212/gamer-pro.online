@@ -1,15 +1,17 @@
 <?php
 declare(strict_types=1);
 
-foreach (['shifts', 'handover', 'club', 'guests', 'rules', 'exams', 'manage'] as $part) {
+require __DIR__ . '/payroll.php';
+
+foreach (['shifts', 'handover', 'club', 'guests', 'rules', 'exams', 'manage', 'payroll'] as $part) {
     require __DIR__ . '/pages/' . $part . '.php';
     require __DIR__ . '/actions/' . $part . '.php';
 }
 
 final class Portal
 {
-    use PagesShifts, PagesHandover, PagesClub, PagesGuests, PagesRules, PagesExams, PagesManage;
-    use ActionsShifts, ActionsHandover, ActionsClub, ActionsGuests, ActionsRules, ActionsExams, ActionsManage;
+    use PagesShifts, PagesHandover, PagesClub, PagesGuests, PagesRules, PagesExams, PagesManage, PagesPayroll;
+    use ActionsShifts, ActionsHandover, ActionsClub, ActionsGuests, ActionsRules, ActionsExams, ActionsManage, ActionsPayroll;
 
     /** path => [метод, право] */
     private const ROUTES = [
@@ -35,6 +37,7 @@ final class Portal
         '/manage/journal' => ['pageJournal', 'journal.view'],
         '/manage/employees' => ['pageEmployees', 'staff.manage'],
         '/manage/grades' => ['pageGrades', 'staff.manage'],
+        '/manage/payroll' => ['pagePayroll', 'owner'],
         '/manage/tasks' => ['pageTasks', 'tasks.assign'],
         '/manage/accounts' => ['pageAccounts', 'owner'],
         '/manage/exams' => ['pageManageExams', 'exams.manage'],
@@ -85,6 +88,7 @@ final class Portal
         'delete_employee' => 'doDeleteEmployee',
         'assign_grade' => 'doAssignGrade',
         'save_grade' => 'doSaveGrade',
+        'save_payroll' => 'doSavePayroll',
         'delete_grade' => 'doDeleteGrade',
         'save_account' => 'doSaveAccount',
         'update_access' => 'doUpdateAccess',
@@ -295,6 +299,7 @@ final class Portal
 
     private static function doLogin(): void
     {
+        csrf_check();
         $login = strtolower(trim((string) ($_POST['login'] ?? '')));
         $password = (string) ($_POST['password'] ?? '');
         $_SESSION['last_login'] = mb_substr($login, 0, 64);
@@ -502,12 +507,12 @@ final class Portal
     }
 
     /** Смены сотрудников за вчера и сегодня, которые идут прямо сейчас. */
-    private static function liveShifts(?int $employeeId = null): array
+    private static function liveShifts(?int $employeeId = null, ?DateTimeImmutable $now = null): array
     {
-        $now = now_tyumen();
-        $today = date_key($now);
+        $now ??= now_tyumen();
+        $now = $now->setTimezone(new DateTimeZone(APP_TZ));
         $yesterday = $now->modify('-1 day')->format('Y-m-d');
-        $params = [$yesterday, $today];
+        $params = [$yesterday, $now->modify('+1 day')->format('Y-m-d')];
         $extra = '';
         if ($employeeId !== null) {
             $extra = ' AND s."employeeId" = ?';
@@ -518,7 +523,7 @@ final class Portal
              FROM shifts s
              JOIN employees e ON e.id = s."employeeId"
              JOIN branches b ON b.id = s."branchId"
-             WHERE s.date IN (?, ?)' . $extra . '
+             WHERE s.date >= ? AND s.date < ?' . $extra . '
              ORDER BY b."sortOrder", e."sortOrder", s.date',
             $params,
         );
@@ -551,9 +556,9 @@ final class Portal
         $rows = Db::all(
             'SELECT s.id, s.date, s."branchId", b.name AS "branchName", s."shiftType", s."employeeId"
              FROM shifts s JOIN branches b ON b.id = s."branchId"
-             WHERE s."employeeId" = ? AND s.date >= ? AND s.date <= ?
+             WHERE s."employeeId" = ? AND s.date >= ? AND s.date < ?
              ORDER BY s.date',
-            [$employeeId, $from, $to],
+            [$employeeId, $from, add_days($to, 1)],
         );
         $out = [];
         foreach ($rows as $r) {
@@ -600,15 +605,15 @@ final class Portal
         header('Content-Type: text/html; charset=utf-8');
         $out = '<!DOCTYPE html><html lang="ru" class="bg-background"><head>';
         $out .= '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">';
-        $out .= '<meta name="color-scheme" content="light dark"><meta name="theme-color" content="#f3f4f6"><meta name="robots" content="noindex, nofollow">';
+        $out .= '<meta name="color-scheme" content="light dark"><meta name="theme-color" content="#f5f7fc"><meta name="robots" content="noindex, nofollow">';
         $out .= '<title>' . h($title . ' · ' . APP_NAME) . '</title>';
         $out .= '<link rel="icon" href="' . h(asset('img/icon-light-32x32.png')) . '" sizes="32x32">';
         $out .= '<link rel="apple-touch-icon" href="' . h(asset('img/apple-icon.png')) . '">';
         $out .= '<link rel="manifest" href="' . h(asset('manifest.webmanifest')) . '">';
         $out .= '<link rel="preload" href="' . h($base . '/assets/fonts/geist-cyrillic.woff2') . '" as="font" type="font/woff2" crossorigin>';
-        $out .= '<link rel="preload" href="' . h($base . '/assets/fonts/unbounded-cyrillic.woff2') . '" as="font" type="font/woff2" crossorigin>';
+        $out .= '<meta name="description" content="Рабочий портал GAMER PRO: график смен, команда, бонусная программа и начисления сотрудникам.">';
         $out .= '<link rel="stylesheet" href="' . h(asset('css/app.css')) . '">';
-        $out .= '<script>' . THEME_BOOT . '(function(){var m=document.querySelector(\'meta[name="theme-color"]\');if(m&&document.documentElement.classList.contains("dark"))m.content="#0d0f12"})();</script>';
+        $out .= '<script>' . THEME_BOOT . '(function(){var m=document.querySelector(\'meta[name="theme-color"]\');if(m&&document.documentElement.classList.contains("dark"))m.content="#161d2a"})();</script>';
         $out .= '</head><body class="min-h-dvh bg-background font-sans text-foreground antialiased">';
         $out .= '<a href="#main" class="skip-link">Перейти к содержимому</a>';
         if ($user) {

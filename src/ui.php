@@ -314,13 +314,17 @@ function shift_chip(array $shift, array $opts = []): string
         ? 'border border-dashed border-border bg-transparent text-muted-foreground'
         : shift_tone_class($type);
     if ($mine && !$away) {
-        $cls .= ' ring-2 ring-primary ring-offset-1 ring-offset-card';
+        $cls .= ' is-mine';
     }
     $hint = $away ? 'в клубе ' . $shift['awayAtBranchName'] : (SHIFT_LABELS[$type] ?? $type) . ' · ' . (SHIFT_HINTS[$type] ?? '');
     $html = '<span class="cal-chip ' . $cls . '" title="' . h($name . ' · ' . $hint) . '">';
     $html .= icon($away ? 'arrow-up-right' : (SHIFT_ICONS[$type] ?? 'sun'), 'cal-chip-icon size-4');
     $html .= '<span class="cal-chip-body"><span class="cal-chip-name"><span class="cal-name-short">' . h(short_name($name)) . '</span><span class="cal-name-full">' . h($name) . '</span></span>';
-    $html .= '<span class="cal-hint' . ($away ? ' is-always' : '') . '">' . h($hint) . '</span></span>';
+    $html .= '<span class="cal-hint' . ($away ? ' is-always' : '') . '">' . h($hint . (!$away && $type !== 'day' ? ' · +1 день' : '')) . '</span>';
+    if (!$away && isset($shift['date']) && shift_state((string) $shift['date'], $type)['state'] === 'live') {
+        $html .= '<span class="cal-live"><span class="live-dot" aria-hidden="true"></span>Сейчас</span>';
+    }
+    $html .= '</span>';
     if ($mine) {
         $html .= '<span class="sr-only">(вы)</span>';
     }

@@ -91,7 +91,8 @@ const NAV_GROUPS = [
     ['id' => 'manage', 'label' => 'Управление', 'items' => [
         ['href' => '/manage/journal', 'label' => 'Журнал действий', 'icon' => 'history', 'perm' => 'journal.view'],
         ['href' => '/manage/employees', 'label' => 'Сотрудники', 'icon' => 'users', 'perm' => 'staff.manage'],
-        ['href' => '/manage/grades', 'label' => 'Уровни и ставки', 'icon' => 'wallet', 'perm' => 'staff.manage'],
+        ['href' => '/manage/payroll', 'label' => 'Зарплата и выплаты', 'icon' => 'wallet', 'perm' => 'owner'],
+        ['href' => '/manage/grades', 'label' => 'Уровни и ставки', 'icon' => 'star', 'perm' => 'staff.manage'],
         ['href' => '/manage/exams', 'label' => 'Результаты экзаменов', 'icon' => 'clipboard-check', 'perm' => 'exams.manage'],
         ['href' => '/manage/accounts', 'label' => 'Доступы и права', 'icon' => 'key', 'perm' => 'owner'],
         ['href' => '/manage/database', 'label' => 'База данных', 'icon' => 'database', 'perm' => 'owner'],
@@ -118,7 +119,7 @@ function is_date_key(string $key): bool
 function date_from_key(string $key): ?DateTimeImmutable
 {
     $d = DateTimeImmutable::createFromFormat('!Y-m-d', substr($key, 0, 10), new DateTimeZone(APP_TZ));
-    return $d ?: null;
+    return $d && $d->format('Y-m-d') === substr($key, 0, 10) ? $d : null;
 }
 
 function parse_date_key(string $key): ?array
@@ -269,7 +270,10 @@ function format_month_title(int $year, int $month): string
  */
 function shift_window(string $dateKey, string $type): array
 {
-    $d = date_from_key($dateKey) ?? now_tyumen()->setTime(0, 0);
+    $d = date_from_key(substr($dateKey, 0, 10));
+    if (!$d || !in_array($type, SHIFT_TYPES, true)) {
+        throw new InvalidArgumentException('Некорректная дата или тип смены');
+    }
     return match ($type) {
         'night' => [$d->setTime(20, 0), $d->modify('+1 day')->setTime(8, 0)],
         'full' => [$d->setTime(8, 0), $d->modify('+1 day')->setTime(8, 0)],

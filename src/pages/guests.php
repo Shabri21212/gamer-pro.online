@@ -177,11 +177,11 @@ trait PagesGuests
         if (!$tiers) {
             $html .= empty_state('percent', 'Уровни не настроены');
         } else {
-            $cols = [2 => 'lg:grid-cols-2', 3 => 'lg:grid-cols-3', 4 => 'lg:grid-cols-4', 5 => 'lg:grid-cols-5'][min(5, max(2, count($tiers)))];
+            $cols = [2 => 'lg:grid-cols-2', 3 => 'md:grid-cols-3', 4 => 'lg:grid-cols-4', 5 => 'lg:grid-cols-5'][min(5, max(2, count($tiers)))];
             $html .= '<div class="grid gap-3 sm:grid-cols-2 ' . $cols . '" role="radiogroup" aria-label="Уровень гостя" data-tiers>';
             foreach ($tiers as $i => $t) {
                 $range = $t['maxHours'] === null || $t['maxHours'] === '' ? 'от ' . (int) $t['minHours'] . ' ч' : (int) $t['minHours'] . '–' . (int) $t['maxHours'] . ' ч';
-                $html .= '<button type="button" role="radio" aria-checked="' . ($i === 0 ? 'true' : 'false') . '" class="tier-card" data-tier data-percent="' . (int) $t['cashbackPercent'] . '" data-title="' . h($t['title']) . '">';
+                $html .= '<button type="button" role="radio" aria-checked="' . ($i === 0 ? 'true' : 'false') . '" tabindex="' . ($i === 0 ? '0' : '-1') . '" class="tier-card" data-tier data-percent="' . (int) $t['cashbackPercent'] . '" data-title="' . h($t['title']) . '">';
                 $html .= '<span class="flex items-center justify-between gap-2"><span class="font-semibold">' . h($t['title']) . '</span><span class="text-xs text-muted-foreground tabular-nums">' . h($range) . '</span></span>';
                 $html .= '<span class="font-display text-3xl leading-none font-semibold tabular-nums">' . (int) $t['cashbackPercent'] . '<span class="text-lg">%</span></span>';
                 $html .= '<span class="flex items-center gap-1.5 text-xs text-muted-foreground">' . icon('cake', 'size-3.5') . 'В день рождения ' . h(money_rub((int) $t['birthdayBonus'])) . '</span></button>';
@@ -191,8 +191,13 @@ trait PagesGuests
 
         $html .= '<div class="grid items-start gap-6 lg:grid-cols-2">';
         $calc = card_head('Кэшбек с пополнения', 'Уровень: <span class="font-semibold text-foreground" data-tier-name>' . h((string) ($tiers[0]['title'] ?? '—')) . '</span>', '', 'gift');
-        $calc .= '<div class="mt-5 grid grid-cols-2 items-end gap-4">' . ui_field('Пополнение, ₽', '<input class="' . field_class('h-11 text-lg tabular-nums') . '" inputmode="numeric" placeholder="1000" data-topup>');
-        $calc .= '<div class="flex flex-col gap-1 pb-1"><span class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Вернётся бонусами</span><output class="font-display text-3xl leading-none font-semibold text-primary-ink tabular-nums" data-cashback>—</output></div></div>';
+        $calc .= '<div class="mt-5 grid items-end gap-5 sm:grid-cols-2">' . ui_field('Пополнение, ₽', '<input id="topup" class="' . field_class('h-12 text-lg tabular-nums') . '" inputmode="decimal" value="1000" maxlength="16" aria-describedby="cashback-hint" data-topup' . (!$tiers ? ' disabled' : '') . '>');
+        $calc .= '<div class="flex flex-col gap-2"><span class="text-sm text-muted-foreground">Вернётся на бонусный баланс</span><output for="topup" class="text-3xl font-semibold tracking-tight text-primary-ink tabular-nums" aria-live="polite" aria-atomic="true" data-cashback>' . ($tiers ? (int) ($tiers[0]['cashbackPercent'] * 10) . ' бонусов' : '—') . '</output></div></div>';
+        $calc .= '<div class="mt-4 flex flex-wrap gap-2">';
+        foreach ([500, 1000, 2000, 5000] as $amount) {
+            $calc .= '<button type="button" class="' . btn_class('outline', 'sm') . '" data-topup-preset="' . $amount . '"' . (!$tiers ? ' disabled' : '') . '>' . h(money_rub($amount)) . '</button>';
+        }
+        $calc .= '</div><p id="cashback-hint" class="mt-4 text-sm text-muted-foreground" data-cashback-hint>' . ($tiers ? 'Кэшбек ' . (int) $tiers[0]['cashbackPercent'] . '% · округление до целого бонуса' : 'Сначала настройте уровни лояльности') . '</p>';
         $html .= card($calc, 'p-5', 'section', 'data-cashback-calc data-percent="' . (int) ($tiers[0]['cashbackPercent'] ?? 0) . '"');
 
         $time = card_head('Стоимость времени', 'Поминутно по цене часа на базовом тарифе', '', 'timer');

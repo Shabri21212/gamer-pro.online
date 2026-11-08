@@ -445,7 +445,7 @@ trait PagesManage
                 $arch .= form_open('delete_employee', confirm_attr('Удалить «' . $name . '» навсегда? Удалятся его смены, задания, закреплённые места и штрафы. Отменить это нельзя.')) . hidden('id', $eid)
                     . '<button class="' . btn_class('danger-ghost', 'sm') . '">' . icon('trash', 'size-4') . 'Удалить</button></form></div></li>';
             }
-            $html .= self::collapsible('А��хив', (string) count($archived), $arch . '</ul>', 'inbox');
+            $html .= self::collapsible('Архив', (string) count($archived), $arch . '</ul>', 'inbox');
         }
 
         $old = form_stash_take('employee-new');
@@ -458,13 +458,6 @@ trait PagesManage
     private static function pageGrades(array $user): void
     {
         $grades = self::gradeRows();
-        $gradeById = [];
-        foreach ($grades as $g) {
-            $gradeById[$g['id']] = $g;
-        }
-        $month = self::monthFromQuery();
-        $units = self::shiftUnits($month['from'], $month['to']);
-        $fines = self::finesTotals($month['from'], $month['to']);
         $emps = self::employees();
         $countByGrade = [];
         foreach ($emps as $e) {
@@ -473,7 +466,7 @@ trait PagesManage
             }
         }
 
-        $html = page_head('Уровни и ставки', 'Ставка — сумма за одну смену 12 часов. Сутки считаются за две смены. Начисления считаются по графику смен минус штрафы.', '<a class="' . btn_class('outline') . '" href="' . h(url_to('/manage/employees')) . '">' . icon('users', 'size-4') . 'Сотрудники</a>');
+        $html = page_head('Уровни и ставки', 'Ставка — сумма за одну смену 12 часов. Сутки считаются за две смены. Зарплатная ведомость доступна владельцу в отдельном разделе.', '<a class="' . btn_class('outline') . '" href="' . h(url_to('/manage/employees')) . '">' . icon('users', 'size-4') . 'Сотрудники</a>');
 
         $gl = card_head('Уровни', $grades ? h(plural(count($grades), 'уровень', 'уровня', 'уровней')) : 'Пока нет ни одного', '', 'star');
         if ($grades) {
@@ -509,54 +502,10 @@ trait PagesManage
             $hist .= '</ul>';
         }
 
-        $rows = [];
-        $sum = ['units' => 0, 'gross' => 0, 'fines' => 0];
-        foreach ($emps as $e) {
-            $eid = (int) $e['id'];
-            $u = $units[$eid] ?? 0;
-            $fn = $fines[$eid] ?? 0;
-            if (!boolish($e['isActive']) && $u === 0 && $fn === 0) {
-                continue;
-            }
-            $g = $e['gradeId'] !== null ? ($gradeById[(int) $e['gradeId']] ?? null) : null;
-            $gross = $g ? $u * $g['shiftRate'] : 0;
-            $rows[] = ['e' => $e, 'g' => $g, 'units' => $u, 'gross' => $gross, 'fines' => $fn];
-            $sum['units'] += $u;
-            $sum['gross'] += $gross;
-            $sum['fines'] += $fn;
+        if (can($user, 'owner')) {
+            $html .= '<a class="' . btn_class('outline') . ' w-fit" href="' . h(url_to('/manage/payroll')) . '">' . icon('wallet', 'size-4') . 'Открыть зарплатную ведомость</a>';
         }
-
-        $nav = '<div class="flex items-center gap-1"><a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/manage/grades', ['m' => $month['prev']])) . '" aria-label="Предыдущий месяц">' . icon('chevronleft') . '</a>';
-        $nav .= '<span class="min-w-36 text-center font-display text-sm font-semibold">' . h($month['title']) . '</span>';
-        $nav .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/manage/grades', ['m' => $month['next']])) . '" aria-label="Следующий месяц">' . icon('chevronright') . '</a></div>';
-        $pay = '<section class="flex min-w-0 flex-col gap-4">' . section_title('Начисления за ' . $month['name'], $nav);
-        $pay .= '<div class="grid grid-cols-2 gap-3 xl:grid-cols-4">';
-        $pay .= stat_tile('Смен', h(num_fmt($sum['units'])), 'сутки — за две');
-        $pay .= stat_tile('По ставкам', h(money_rub($sum['gross'])));
-        $pay .= stat_tile('Штрафы', h(money_rub($sum['fines'])), '', url_to('/fines'), 'scale', $sum['fines'] > 0);
-        $pay .= stat_tile('К выплате', h(money_rub($sum['gross'] - $sum['fines'])), $month['isCurrent'] ? 'месяц ещё идёт' : '');
-        $pay .= '</div>';
-        if ($rows) {
-            $pay .= table_open(['Сотрудник', 'Уровень', ['Смен', 'text-right'], ['По ставке', 'text-right whitespace-nowrap'], ['Штрафы', 'text-right'], ['К выплате', 'text-right whitespace-nowrap']]);
-            foreach ($rows as $r) {
-                $e = $r['e'];
-                $net = $r['gross'] - $r['fines'];
-                $pay .= '<tr class="border-t border-border"><th scope="row" class="px-4 py-3 text-left font-normal" data-label="Сотрудник"><span class="block font-semibold">' . h((string) $e['name']) . '</span><span class="text-xs text-muted-foreground">' . h(self::branchName((int) $e['homeBranchId'])) . (!boolish($e['isActive']) ? ' · в архиве' : '') . '</span></th>';
-                $pay .= td('Уровень', $r['g'] ? h((string) $r['g']['title']) . '<span class="block text-xs text-muted-foreground tabular-nums">' . h(money_rub($r['g']['shiftRate'])) . ' за смену</span>' : '<a class="text-sm text-primary-ink underline-offset-4 hover:underline" href="' . h(url_to('/manage/employees')) . '">Назначить уровень</a>');
-                $pay .= td('Смен', '<span class="tabular-nums">' . $r['units'] . '</span>', 'text-right');
-                $pay .= td('По ставке', '<span class="whitespace-nowrap tabular-nums">' . h(money_rub($r['gross'])) . '</span>', 'text-right');
-                $pay .= td('Штрафы', $r['fines'] > 0 ? '<span class="whitespace-nowrap text-primary-ink tabular-nums">−' . h(money_rub($r['fines'])) . '</span>' : '<span class="text-muted-foreground">—</span>', 'text-right');
-                $pay .= td('К выплате', '<span class="whitespace-nowrap font-display font-semibold tabular-nums">' . h(money_rub($net)) . '</span>', 'text-right');
-                $pay .= '</tr>';
-            }
-            $pay .= table_close();
-            $pay .= '<p class="text-xs leading-relaxed text-muted-foreground">Расчёт по графику: если смена не состоялась или её отработал другой человек — поправьте график, и сумма пересчитается.</p>';
-        } else {
-            $pay .= empty_state('wallet', 'Нет смен за ' . $month['name'], 'Начисления появятся, когда в графике будут смены этого месяца.');
-        }
-        $pay .= '</section>';
-
-        $html .= '<div class="grid items-start gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]"><div class="flex min-w-0 flex-col gap-6">' . card($gl, 'p-5') . card($hist, 'p-5') . '</div>' . $pay . '</div>';
+        $html .= '<div class="grid items-start gap-6 lg:grid-cols-2">' . card($gl, 'p-5') . card($hist, 'p-5') . '</div>';
         self::layout($user, $html, ['title' => 'Уровни и ставки', 'width' => 'wide']);
     }
 
@@ -627,7 +576,7 @@ trait PagesManage
     private static function newAccountForm(array $empOpts, ?array $old): string
     {
         $f = form_open('save_account', 'class="flex flex-col gap-4" data-submit-once data-new-account');
-        $f .= ui_field('Сотрудник', ui_select('employeeId', $empOpts, (string) ($old['employeeId'] ?? ''), 'data-acc-employee'), 'Выберите карточку без входа или создайте новую.');
+        $f .= ui_field('Сотрудник', ui_select('employeeId', $empOpts, (string) ($old['employeeId'] ?? ''), 'data-acc-employee'), 'Выберите к��рточку без входа или создайте новую.');
         $f .= '<div class="flex flex-col gap-4" data-acc-new-fields><div class="grid gap-4 sm:grid-cols-2">';
         $f .= ui_field('Фамилия и имя', '<input name="name" class="' . field_class() . '" maxlength="60" placeholder="Иванов Пётр" autocomplete="off" value="' . h((string) ($old['name'] ?? '')) . '">');
         $f .= ui_field('Филиал', ui_select('homeBranchId', self::branchOptions(), (string) ($old['homeBranchId'] ?? '')));
@@ -817,7 +766,7 @@ trait PagesManage
             ['Импорт в phpMyAdmin', 'Войдите в phpMyAdmin, слева выберите базу → вкладка «Импорт» → выберите <span class="font-mono">localhost.sql</span> → «Вперёд». Таблицы портала создадутся заново.'],
             ['Файлы сайта', 'Залейте папку портала в корень сайта (обычно <span class="font-mono">public_html</span>) вместе со скрытым файлом <span class="font-mono">.htaccess</span>. Версия PHP — 8.1 или новее.'],
             ['Подключение к базе', 'Скопируйте <span class="font-mono">config.example.php</span> в <span class="font-mono">config.php</span> и впишите имя базы, пользователя и пароль из панели reg.ru.'],
-            ['Вход', 'Откройте сайт и войдите своим логином — пароли у всех сотрудников остаются прежними.'],
+            ['Вход', 'Откро��те сайт и войдите своим логином — пароли у всех сотрудников остаются прежними.'],
         ];
         $how = card_head('Как перенести на reg.ru', 'Пять шагов, около десяти минут', '', 'info');
         $how .= '<ol class="mt-5 flex flex-col gap-4">';

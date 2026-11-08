@@ -82,8 +82,8 @@ trait PagesShifts
         $rows = Db::all(
             'SELECT s.date, s."branchId", s."shiftType", s."employeeId", e.name AS "employeeName"
              FROM shifts s JOIN employees e ON e.id = s."employeeId"
-             WHERE s.date IN (?, ?) ORDER BY e."sortOrder"',
-            [date_key($now), $now->modify('+1 day')->format('Y-m-d')],
+             WHERE s.date >= ? AND s.date < ? ORDER BY e."sortOrder"',
+            [date_key($now), $now->modify('+2 days')->format('Y-m-d')],
         );
         $best = [];
         foreach ($rows as $r) {
@@ -124,7 +124,9 @@ trait PagesShifts
         $tone = $type === 'night' ? 'text-night-strong' : 'text-day-strong';
         $html .= '<div class="relative flex flex-col gap-2"><p id="my-shift-title" class="font-display text-[2rem] leading-none font-semibold tracking-tight sm:text-[2.6rem]">' . h($s['branchName']) . '</p>';
         $html .= '<p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-sidebar-foreground">' . icon(SHIFT_ICONS[$type] ?? 'sun', 'size-4 ' . $tone) . '<span class="font-semibold text-sidebar-accent-foreground">' . h(SHIFT_LABELS[$type] ?? $type) . '</span><span>' . $st['start']->format('H:i') . '–' . $st['end']->format('H:i') . '</span>';
-        if ($s['date'] !== $today) {
+        if ($type !== 'day') {
+            $html .= '<span>· ' . h(format_day_month($s['date'])) . ' → ' . h(format_day_month($st['end']->format('Y-m-d'))) . '</span>';
+        } elseif ($s['date'] !== $today) {
             $html .= '<span>· ' . h(format_day_short($s['date'])) . '</span>';
         }
         $html .= '</p></div>';
@@ -362,18 +364,18 @@ trait PagesShifts
              FROM shifts s
              JOIN employees e ON e.id = s."employeeId"
              JOIN branches hb ON hb.id = e."homeBranchId"
-             WHERE s."branchId" = ? AND s.date >= ? AND s.date <= ?
+             WHERE s."branchId" = ? AND s.date >= ? AND s.date < ?
              ORDER BY s.date, CASE s."shiftType" WHEN \'day\' THEN 0 WHEN \'full\' THEN 1 ELSE 2 END, e."sortOrder"',
-            [$branch['id'], $from, $to],
+            [$branch['id'], $from, add_days($to, 1)],
         );
         $away = Db::all(
             'SELECT s.id, s.date, s."employeeId", s."shiftType", e.name AS "employeeName", b.name AS "atBranchName"
              FROM shifts s
              JOIN employees e ON e.id = s."employeeId"
              JOIN branches b ON b.id = s."branchId"
-             WHERE e."homeBranchId" = ? AND s."branchId" != ? AND s.date >= ? AND s.date <= ?
+             WHERE e."homeBranchId" = ? AND s."branchId" != ? AND s.date >= ? AND s.date < ?
              ORDER BY s.date',
-            [$branch['id'], $branch['id'], $from, $to],
+            [$branch['id'], $branch['id'], $from, add_days($to, 1)],
         );
         $byDate = [];
         for ($d = 1; $d <= $last; $d++) {
@@ -406,7 +408,7 @@ trait PagesShifts
         foreach (self::employees() as $e) {
             $half[(int) $e['id']] = ['name' => (string) $e['name'], 'first' => 0, 'second' => 0, 'month' => 0];
         }
-        foreach (Db::all('SELECT "employeeId", date, "shiftType" FROM shifts WHERE date >= ? AND date <= ?', [$from, $to]) as $r) {
+        foreach (Db::all('SELECT "employeeId", date, "shiftType" FROM shifts WHERE date >= ? AND date < ?', [$from, add_days($to, 1)]) as $r) {
             $id = (int) $r['employeeId'];
             if (!isset($half[$id])) {
                 continue;
@@ -417,7 +419,17 @@ trait PagesShifts
         }
         $mine = $half[$meId] ?? ['first' => 0, 'second' => 0, 'month' => 0];
 
-        $html = page_head('График смен', 'День 08:00–20:00, ночь 20:00–08:00, сутки 08:00–08:00 — по времени клуба.', self::branchSwitch('/schedule', $branch, ['m' => $monthParam]));
+        $html = page_head('График смен', 'Команда, смены и рабочий ритм клуба.', self::branchSwitch('/schedule', $branch, ['m' => $monthParam]));
+        $live = array_values(array_filter(self::liveShifts(), static fn ($s) => (int) $s['branchId'] === $branch['id']));
+        $html .= '<section class="schedule-live" aria-label="Сейчас на смене"><div class="flex flex-wrap items-center gap-3"><span class="inline-flex items-center gap-2 text-sm text-muted-foreground">' . icon('clock', 'size-4') . 'Сейчас в клубе</span>';
+        foreach ($live as $s) {
+            $end = $s['state']['end'];
+            $html .= '<span class="inline-flex items-center gap-2 text-sm font-medium">' . icon(SHIFT_ICONS[$s['shiftType']], 'size-4 text-primary-ink') . h(short_name($s['employeeName'])) . '<span class="text-muted-foreground">до ' . $end->format('H:i') . ($end->format('Y-m-d') !== $today ? ' завтра' : '') . '</span></span>';
+        }
+        if (!$live) {
+            $html .= '<span class="text-sm text-muted-foreground">Нет активных смен по графику</span>';
+        }
+        $html .= '</div><span class="text-sm text-muted-foreground tabular-nums"><time data-clock>' . $now->format('H:i') . '</time> · Тюмень, UTC+5</span></section>';
 
         $html .= '<div class="flex flex-wrap items-center justify-between gap-3">';
         $html .= '<div class="flex items-center gap-2">';
@@ -451,7 +463,7 @@ trait PagesShifts
         }
         $html .= '</div>';
 
-        $html .= '<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">';
+        $html .= '<details class="schedule-summary"><summary>Сводка по сотруднику и расчёт за период</summary><div class="grid gap-4 p-4 md:grid-cols-2">';
         $html .= '<section class="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-xs" data-half-box data-me="' . $meId . '" data-half="' . h(json_encode($half, JSON_UNESCAPED_UNICODE)) . '"' . ($meId && isset($half[$meId]) ? '' : ' hidden') . '>';
         $html .= '<div class="flex flex-wrap items-baseline justify-between gap-2"><h3 class="text-sm font-semibold" data-half-title>Ваши смены за месяц</h3><span class="text-xs text-muted-foreground">сутки = 2 смены</span></div>';
         $html .= '<dl class="grid grid-cols-3 gap-2">';
@@ -462,7 +474,7 @@ trait PagesShifts
         $html .= '<section class="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-xs md:col-start-2" data-range-box data-last="' . $last . '">';
         $html .= '<div class="flex flex-wrap items-center justify-between gap-2"><h3 class="text-sm font-semibold" data-range-title>Посчитать смены за период</h3><div class="flex gap-1.5"><button type="button" class="' . btn_class('outline', 'xs') . '" data-range-preset="1-15">1–15</button><button type="button" class="' . btn_class('outline', 'xs') . '" data-range-preset="16-end">16–' . $last . '</button><button type="button" class="' . btn_class('quiet', 'xs') . ' hidden" data-range-clear>Сбросить</button></div></div>';
         $html .= '<div data-range-body><p class="text-sm leading-relaxed text-muted-foreground"><span class="hidden md:inline">Зажмите мышь на дне и протяните — выделятся даты. </span>Или выберите половину месяца кнопками.</p></div></section>';
-        $html .= '</div>';
+        $html .= '</div></details>';
 
         $lead = monday_first_weekday($year, $month, 1);
         $html .= '<div class="cal" data-month-grid data-year="' . $year . '" data-month="' . $month . '" data-last="' . $last . '" data-me="' . $meId . '" data-can-edit="' . ($canEdit ? '1' : '0') . '">';
@@ -504,7 +516,7 @@ trait PagesShifts
             }
             $html .= '</div></div>';
         }
-        $html .= '</div></div>';
+        $html .= '</div></div><p class="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">' . icon('info', 'mt-0.5 size-4 shrink-0') . 'День — 08:00–20:00 · Ночь — 20:00–08:00 следующего дня. Ночная смена остаётся на дате её начала, даже после полуночи.</p>';
 
         $body = '<div class="flex flex-col gap-2" data-existing></div>';
         if ($canEdit) {
@@ -512,8 +524,8 @@ trait PagesShifts
             $body .= form_open('save_day', 'class="flex flex-col gap-4 border-t border-border pt-4" data-day-form') . hidden('branchId', $branch['id']) . '<input type="hidden" name="date" value="" data-dialog-date>';
             $body .= '<p class="text-sm font-semibold">Поставить на этот день · ' . h($branch['name']) . '</p>';
             $body .= '<div class="grid gap-3 sm:grid-cols-2">';
-            $body .= ui_field('<span class="inline-flex items-center gap-1.5">' . icon('sun', 'size-4 text-day-strong') . 'Днём · 08–20</span>', ui_select('dayEmployeeId', $opts, '0', 'data-day-slot="day"'));
-            $body .= ui_field('<span class="inline-flex items-center gap-1.5">' . icon('moon', 'size-4 text-night-strong') . 'Ночью · 20–08</span>', ui_select('nightEmployeeId', $opts, '0', 'data-day-slot="night"'));
+            $body .= ui_field('Днём · 08:00–20:00', ui_select('dayEmployeeId', $opts, '0', 'data-day-slot="day"'));
+            $body .= ui_field('Ночью · 20:00–08:00 (+1 день)', ui_select('nightEmployeeId', $opts, '0', 'data-day-slot="night"'));
             $body .= '</div><p class="text-xs leading-relaxed text-muted-foreground">Один и тот же сотрудник днём и ночью — встанет на сутки. Сотрудник другого филиала встанет как подмена.</p>';
             $body .= '<div class="flex flex-wrap justify-end gap-2"><button type="button" class="' . btn_class('ghost') . '" data-dialog-close>Отмена</button><button class="' . btn_class() . '">' . icon('check', 'size-4') . 'Сохранить день</button></div></form>';
         }
@@ -626,7 +638,7 @@ trait PagesShifts
         if ($canAssign) {
             $html .= '<section class="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-xs sm:flex-row sm:items-end">';
             $html .= ui_field('Распределить места', ui_select('', ['' => 'Не распределять — только отметки'] + self::employeeOptions(null, $branch['id']), null, 'data-assign-emp aria-describedby="assign-hint"'), '', 'flex-1 sm:max-w-sm');
-            $html .= '<p id="assign-hint" class="flex-1 text-xs leading-relaxed text-muted-foreground">Выберите сотрудника и нажимайте на места — они закрепятся за ним. Повторное нажатие снимает закрепление.</p>';
+            $html .= '<p id="assign-hint" class="flex-1 text-xs leading-relaxed text-muted-foreground">��ыберите сотрудника и нажимайте на места — они закрепятся за ним. Повторное нажатие снимает закрепление.</p>';
             $html .= '<button type="button" class="' . btn_class('outline', 'sm') . ' hidden" data-assign-done>' . icon('check', 'size-4') . 'Готово</button></section>';
         }
 
