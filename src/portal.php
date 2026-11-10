@@ -731,7 +731,7 @@ final class Portal
         $sub = $user['roleLabel'] . ($user['homeBranchId'] ? ' · ' . self::branchName($user['homeBranchId']) : '');
         $html .= '<div class="border-t border-sidebar-border p-3"><div class="flex items-center gap-2.5">';
         $html .= '<a href="' . h(url_to('/account')) . '" class="flex min-w-0 flex-1 items-center gap-3 rounded-md p-1.5 transition-colors hover:bg-sidebar-accent">';
-        $html .= avatar($name, 'size-9', 'bg-sidebar-accent text-sidebar-muted');
+        $html .= avatar($name, 'size-9 text-xs', 'sidebar');
         $html .= '<span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold text-sidebar-accent-foreground">' . h(short_name($name)) . '</span><span class="truncate text-xs text-sidebar-muted">' . h($sub) . '</span></span></a>';
         $html .= '<button type="button" class="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" data-theme-toggle aria-label="Сменить тему">' . icon('moon', 'size-4') . '</button>';
         $html .= form_open('logout', 'action="' . h(url_to('/sign-out')) . '" class="shrink-0"') . '<button class="inline-flex size-9 items-center justify-center rounded-md text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-brand" aria-label="Выйти" title="Выйти">' . icon('logout', 'size-4') . '</button></form>';

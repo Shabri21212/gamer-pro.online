@@ -530,15 +530,14 @@ trait PagesShifts
         $html .= '<h2 class="min-w-40 px-1 text-center font-display text-lg font-semibold tracking-tight">' . h(format_month_title($year, $month)) . '</h2>';
         $html .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . $monthHref($nextM) . '" aria-label="Следующий месяц">' . icon('chevronright') . '</a>';
         if (!$isCurrentMonth) {
-            $html .= '<a class="' . btn_class('quiet', 'sm') . '" href="' . $monthHref(null) . '">Сегодня</a>';
+            $html .= '<a class="' . btn_class('quiet', 'sm') . '" href="' . $monthHref(null) . '#today">Сегодня</a>';
         }
-        $html .= '</div>';
+        $html .= '</div><div class="flex flex-wrap items-center gap-2">' . self::scheduleViewSwitch();
         if ($canEdit) {
-            $html .= '<div class="flex flex-wrap items-center gap-2">';
             $html .= '<button type="button" class="' . btn_class('primary', 'sm') . '" data-paint-toggle aria-expanded="false" aria-controls="paint-panel">' . icon('pencil', 'size-4') . 'Быстрое заполнение</button>';
-            $html .= '<button type="button" class="' . btn_class('outline', 'sm') . '" data-dialog-open="copy-week">' . icon('copy', 'size-4') . 'Повторить неделю</button></div>';
+            $html .= '<button type="button" class="' . btn_class('outline', 'sm') . '" data-dialog-open="copy-week">' . icon('copy', 'size-4') . 'Повторить неделю</button>';
         }
-        $html .= '</div>';
+        $html .= '</div></div>';
         if ($canEdit) {
             $html .= self::paintPanel($branch, $filterEmps);
         }
@@ -557,47 +556,68 @@ trait PagesShifts
             $html .= '</div>';
         }
 
-        $html .= '<section class="cal" aria-label="' . h('Смены · ' . format_month_title($year, $month) . ' · ' . $branch['name']) . '" data-month-grid data-year="' . $year . '" data-month="' . $month . '" data-last="' . $last . '" data-can-edit="' . ($canEdit ? '1' : '0') . '">';
-        $html .= '<div class="cal-head" aria-hidden="true"><div>Дата</div><div>' . icon('sun') . 'День <span>08:00–20:00</span></div><div>' . icon('moon') . 'Ночь <span>20:00–08:00</span></div></div>';
-        $html .= '<div class="cal-grid">';
+        // Одна разметка на оба вида: календарь и список различаются только стилями (data-view), поэтому
+        // фильтр, подсчёт периода, окно дня и «кисть» работают одинаково, а несохранённые правки переживают смену вида.
+        $html .= '<section class="cal" aria-label="' . h('Смены · ' . format_month_title($year, $month) . ' · ' . $branch['name']) . '" data-month-grid data-view="month" data-year="' . $year . '" data-month="' . $month . '" data-last="' . $last . '" data-can-edit="' . ($canEdit ? '1' : '0') . '">';
+        $html .= '<script>' . SCHEDULE_VIEW_BOOT . '</script>';
+        $html .= '<div class="cal-head cal-head-list" aria-hidden="true"><div>Дата</div><div>' . icon('sun') . 'День <span>08:00–20:00</span></div><div>' . icon('moon') . 'Ночь <span>20:00–08:00</span></div></div>';
+        $html .= '<div class="cal-head cal-head-month" aria-hidden="true">';
+        foreach (WEEKDAY_SHORT as $i => $weekdayName) {
+            $html .= '<div' . ($i >= 5 ? ' class="is-weekend"' : '') . '>' . h($weekdayName) . '</div>';
+        }
+        $html .= '</div>';
+        // Неделя календаря начинается с понедельника: пустые ячейки до первого числа и после последнего достраивают её.
+        $leadPads = weekday_from_date_key($from);
+        $pad = '<div class="cal-pad" aria-hidden="true"></div>';
+        $html .= '<div class="cal-grid">' . str_repeat($pad, $leadPads);
         foreach ($byDate as $key => $cell) {
             $wd = weekday_from_date_key($key);
-            $count = count($cell['shifts']);
+            $isToday = $key === $today;
             $hasDay = $hasNight = $hasLive = false;
             $items = '';
+            // Ячейка — кнопка, её содержимое скринридер не читает: имена и смены дублируются в подписи.
+            $spoken = [];
             foreach ($cell['shifts'] as $s) {
+                $type = (string) $s['shiftType'];
                 $live = isset($liveIds[(int) $s['id']]);
                 $hasLive = $hasLive || $live;
-                $hasDay = $hasDay || $s['shiftType'] !== 'night';
-                $hasNight = $hasNight || $s['shiftType'] !== 'day';
+                $hasDay = $hasDay || $type !== 'night';
+                $hasNight = $hasNight || $type !== 'day';
                 $items .= self::calItem($s, $meId, $live);
+                $spoken[] = mb_strtolower(SHIFT_LABELS[$type] ?? 'смена') . ' — ' . $s['employeeName'] . ($live ? ', идёт сейчас' : '');
             }
             foreach ($cell['away'] as $a) {
                 $live = isset($liveIds[(int) $a['id']]);
                 $hasLive = $hasLive || $live;
                 $items .= self::calItem($a, $meId, $live, (string) $a['atBranchName']);
+                $spoken[] = $a['employeeName'] . ' — в филиале ' . $a['atBranchName'] . ($live ? ', идёт сейчас' : '');
             }
             foreach (['day' => $hasDay, 'night' => $hasNight] as $slot => $taken) {
                 $items .= '<span class="cal-slot' . ($taken ? ' hidden' : '') . '" data-slot-empty="' . $slot . '" aria-hidden="true">' . icon(SHIFT_ICONS[$slot], 'cal-chip-icon') . '—</span>';
             }
             $cls = 'cal-day' . ($hasLive ? ' has-live' : '') . ($wd >= 5 ? ' is-weekend' : '');
-            if ($key === $today) {
+            if ($isToday) {
                 $cls .= ' is-today';
             } elseif ($key < $today && !$hasLive) {
                 $cls .= ' is-past';
             }
-            $label = format_date_human($key) . ($key === $today ? ', сегодня' : '') . ': ' . ($count ? plural($count, 'смена', 'смены', 'смен') : 'смен нет') . ($hasLive ? ', смена идёт сейчас' : '');
-            $html .= '<div class="' . $cls . '" role="button" tabindex="0" data-date-key="' . h($key) . '" aria-label="' . h($label) . '">';
+            $label = format_date_human($key) . ($isToday ? ', сегодня' : '') . ': ' . ($spoken ? implode('; ', $spoken) : 'смен нет');
+            // id="today" — цель кнопки «Сегодня»: ссылка #today работает и без скрипта.
+            $html .= '<div class="' . $cls . '"' . ($isToday ? ' id="today"' : '') . ' role="button" tabindex="0" data-date-key="' . h($key) . '" aria-label="' . h($label) . '">';
             $html .= '<div class="cal-date"><span class="cal-num">' . $cell['day'] . '</span><span class="cal-wd">' . h(mb_strtolower(WEEKDAY_SHORT[$wd])) . '</span></div>';
             $html .= '<div class="cal-shifts">' . $items . '</div></div>';
         }
-        $html .= '</div>';
-        $html .= '<div class="cal-legend" aria-label="Обозначения">';
+        $html .= str_repeat($pad, (7 - ($leadPads + $last) % 7) % 7) . '</div>';
+
+        $html .= '<div class="cal-foot"><ul class="cal-legend" aria-label="Обозначения">';
         foreach (['day' => 'День', 'night' => 'Ночь', 'full' => 'Сутки'] as $tone => $lab) {
-            $html .= '<span class="cal-legend-item"><span class="cal-key" data-tone="' . $tone . '" aria-hidden="true"></span>' . $lab . '</span>';
+            $html .= '<li class="cal-legend-item"><span class="cal-key" data-tone="' . $tone . '" aria-hidden="true"></span>' . $lab . '</li>';
         }
-        $html .= '<span class="cal-legend-item">' . icon('arrow-up-right', 'size-3.5') . 'Вышел в другом филиале</span>';
-        $html .= '<span class="cal-legend-item"><span class="cal-chip-live"><span class="live-dot" aria-hidden="true"></span></span>Идёт сейчас</span></div></section>';
+        $html .= '<li class="cal-legend-item cal-legend-wide">' . icon('arrow-up-right', 'size-3.5') . 'Вышел в другом филиале</li>';
+        $html .= '<li class="cal-legend-item cal-legend-wide"><span class="inline-flex text-brand"><span class="live-dot" aria-hidden="true"></span></span>Идёт сейчас</li></ul>';
+        // В текущем месяце кнопка прокручивает к сегодняшнему дню, в другом — открывает текущий месяц на нём же.
+        $todayHref = $isCurrentMonth ? '#today' : $monthHref(null) . '#today';
+        $html .= '<a class="' . btn_class('ink', 'sm') . '" href="' . $todayHref . '" data-today-jump>' . icon('locate', 'size-4') . 'Сегодня<span class="cal-today-date">' . h(format_day_month($today)) . '</span></a></div></section>';
 
         $sumIds = array_values(array_filter(array_keys($filterEmps), static fn ($id) => isset($half[$id])));
         if ($sumIds) {
@@ -653,6 +673,19 @@ trait PagesShifts
         self::layout($user, $html, ['title' => 'График смен', 'width' => 'wide', 'scripts' => ['schedule']]);
     }
 
+    /**
+     * Переключатель вида графика. Сервер всегда отдаёт календарь; если сотрудник раньше выбрал список,
+     * SCHEDULE_VIEW_BOOT переключает вид и нажатую кнопку ещё до первой отрисовки.
+     */
+    private static function scheduleViewSwitch(): string
+    {
+        $html = '<div class="view-switch" role="group" aria-label="Вид графика">';
+        foreach (['month' => ['calendar', 'Календарь'], 'list' => ['list', 'Список']] as $view => [$iconName, $label]) {
+            $html .= '<button type="button" class="view-switch-btn" data-view-set="' . $view . '" aria-pressed="' . ($view === 'month' ? 'true' : 'false') . '" title="' . h($label) . '">' . icon($iconName, 'size-4') . '<span class="sr-only xl:not-sr-only">' . h($label) . '</span></button>';
+        }
+        return $html . '</div>';
+    }
+
     /** Смена в ячейке календаря; data-атрибуты читает schedule.js (фильтр, подсчёт периода, окно дня). */
     private static function calItem(array $s, int $meId, bool $live, ?string $awayAt = null): string
     {
@@ -676,7 +709,7 @@ trait PagesShifts
         $html .= '<div class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Сотрудник">';
         $first = true;
         foreach ($emps as $id => $name) {
-            $html .= '<button type="button" class="filter-chip paint-emp" data-paint-emp="' . (int) $id . '" data-name="' . h($name) . '" data-short="' . h(short_name($name)) . '" aria-pressed="' . ($first ? 'true' : 'false') . '">' . h(short_name($name)) . '</button>';
+            $html .= '<button type="button" class="filter-chip paint-emp" data-paint-emp="' . (int) $id . '" data-name="' . h($name) . '" data-initials="' . h(initials($name)) . '" aria-pressed="' . ($first ? 'true' : 'false') . '">' . h(short_name($name)) . '</button>';
             $first = false;
         }
         $others = self::employeeOptions(null, $branch['id']);
@@ -689,7 +722,7 @@ trait PagesShifts
                 }
                 $html .= '<optgroup label="' . h((string) $group) . '">';
                 foreach ($list as $v => $l) {
-                    $html .= '<option value="' . (int) $v . '" data-name="' . h((string) $l) . '" data-short="' . h(short_name((string) $l)) . '">' . h((string) $l) . '</option>';
+                    $html .= '<option value="' . (int) $v . '" data-name="' . h((string) $l) . '" data-initials="' . h(initials((string) $l)) . '">' . h((string) $l) . '</option>';
                 }
                 $html .= '</optgroup>';
             }

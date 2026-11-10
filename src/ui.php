@@ -53,6 +53,7 @@ const ICON_PATHS = [
     'plus' => '<path d="M5 12h14M12 5v14"/>',
     'minus' => '<path d="M5 12h14"/>',
     'pin' => '<path d="M20 10c0 4.4-8 12-8 12S4 14.4 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+    'locate' => '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M2 12h3M19 12h3M12 2v3M12 19v3"/>',
     'pushpin' => '<path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
     'clock' => '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     'timer' => '<path d="M10 2h4M12 14l3-3"/><circle cx="12" cy="14" r="8"/>',
@@ -160,7 +161,7 @@ function confirm_attr(string $message): string
     return 'data-confirm="' . h($message) . '"';
 }
 
-/** Подпись + поле внутри ��������дного <label>, чтобы клик по подписи фокусировал поле. */
+/** Подпись + поле внутри ����������дного <label>, чтобы клик по подписи фокусировал поле. */
 function ui_field(string $label, string $control, string $hint = '', string $class = ''): string
 {
     $html = '<label class="flex min-w-0 flex-col gap-1.5 ' . h($class) . '"><span class="text-sm font-medium text-foreground">' . h($label) . '</span>' . $control;
@@ -303,6 +304,7 @@ function shift_tone_class(string $type): string
 
 /**
  * Плашка смены для графика. opts: me (id сотрудника текущего пользователя), live (смена идёт прямо сейчас).
+ * Имя лежит в двух вариантах: полное ФИО и инициалы — их показывает только календарь на телефоне, где ФИО в ячейку не помещается.
  * Разметку повторяет schedule.js для ещё не сохранённых смен «кисти».
  */
 function shift_chip(array $shift, array $opts = []): string
@@ -320,12 +322,14 @@ function shift_chip(array $shift, array $opts = []): string
     } else {
         $html .= icon($away ? 'arrow-up-right' : (SHIFT_ICONS[$type] ?? 'sun'), 'cal-chip-icon');
     }
-    $html .= '<span class="cal-chip-name"><span class="cal-chip-label">' . h(SHIFT_LABELS[$type] . ' · ' . SHIFT_HINTS[$type]) . '</span><span class="cal-name-short" aria-hidden="true">' . h(short_name($name)) . '</span><span class="cal-name-full">' . h($name) . '</span></span>';
+    $html .= '<span class="cal-chip-name"><span class="cal-chip-label">' . h(SHIFT_LABELS[$type] . ' · ' . SHIFT_HINTS[$type]) . '</span><span class="cal-name-initials" aria-hidden="true">' . h(initials($name)) . '</span><span class="cal-name-full">' . h($name) . '</span></span>';
     if ($away) {
         $html .= '<span class="cal-chip-sub">' . h((string) $shift['awayAtBranchName']) . '</span>';
     }
     if (!empty($shift['guestFromBranchName'])) {
-        $html .= '<span class="cal-badge" title="Подмена из филиала ' . h((string) $shift['guestFromBranchName']) . '">' . h(mb_substr((string) $shift['guestFromBranchName'], 0, 3)) . '</span>';
+        // В списке — метка из трёх букв справа от имени, в календаре — полное название филиала строкой ниже.
+        $from = (string) $shift['guestFromBranchName'];
+        $html .= '<span class="cal-badge" title="Подмена из филиала ' . h($from) . '"><span class="cal-badge-short">' . h(mb_substr($from, 0, 3)) . '</span><span class="cal-badge-full">' . h($from) . '</span></span>';
     }
     $sr = ($mine ? ' (вы)' : '') . ', ' . mb_strtolower($hint) . ($live ? ', идёт сейчас' : '');
     return $html . '<span class="sr-only">' . h($sr) . '</span></span>';
@@ -397,13 +401,78 @@ function stat_tile(string $label, string $value, string $hint = '', string $href
     return $html . '</' . $tag . '>';
 }
 
-function avatar(string $name, string $class = 'size-9 text-xs', string $tone = 'bg-muted text-muted-foreground'): string
+/**
+ * Монограмма: инициалы на контрастной плашке со срезом угла — читается одинаково в светлой и тёмной теме
+ * и не похожа на незагруженную фотографию. $tone: ink — на страницах, sidebar — в тёмной боковой панели.
+ * Без имени вместо инициалов стоит значок человека.
+ */
+function avatar(string $name, string $class = 'size-9 text-xs', string $tone = 'ink'): string
 {
-    $glyph = '<svg viewBox="0 0 32 32" class="size-full" aria-hidden="true" focusable="false">'
-        . '<circle cx="16" cy="12.5" r="5.75" fill="currentColor" opacity=".9"/>'
-        . '<path d="M4.5 32c0-6.6 5.15-11.25 11.5-11.25S27.5 25.4 27.5 32Z" fill="currentColor" opacity=".9"/>'
-        . '</svg>';
-    return '<span class="avatar cut inline-flex shrink-0 items-end justify-center overflow-hidden ring-1 ring-inset ring-border ' . h($tone) . ' ' . h($class) . '" style="--cut:7px" aria-hidden="true" title="' . h($name) . '">' . $glyph . '</span>';
+    $toneClass = $tone === 'sidebar' ? 'bg-sidebar-accent-foreground text-sidebar' : 'bg-avatar text-avatar-foreground';
+    $glyph = trim($name) === '' ? icon('user', 'size-1/2') : h(initials($name));
+    return '<span class="avatar cut inline-flex shrink-0 items-center justify-center font-display leading-none font-semibold select-none ' . $toneClass . ' ' . h($class) . '" style="--cut:20%" aria-hidden="true" title="' . h($name) . '">' . $glyph . '</span>';
+}
+
+/**
+ * Номера страниц для листания: первая, последняя и соседи текущей. null — пропуск («…»).
+ * Пропуск длиной в одну страницу заменяется самой страницей: «1 2 3», а не «1 … 3».
+ * @return list<int|null>
+ */
+function page_window(int $page, int $pages, int $around = 1): array
+{
+    $out = [];
+    $prev = 0;
+    for ($p = 1; $p <= $pages; $p++) {
+        if ($p !== 1 && $p !== $pages && abs($p - $page) > $around) {
+            continue;
+        }
+        if ($p - $prev === 2) {
+            $out[] = $p - 1;
+        } elseif ($p - $prev > 2) {
+            $out[] = null;
+        }
+        $out[] = $p;
+        $prev = $p;
+    }
+    return $out;
+}
+
+/**
+ * Листание списка: подпись «Показаны 11–20 из 144» и ссылки на страницы.
+ * $href получает номер страницы и возвращает адрес. Если страница одна, остаётся только подпись.
+ */
+function pager(int $page, int $pages, int $total, int $perPage, callable $href, string $label = 'Страницы'): string
+{
+    if ($total <= 0) {
+        return '';
+    }
+    $from = ($page - 1) * $perPage + 1;
+    $to = min($total, $page * $perPage);
+    $html = '<div class="flex flex-col items-center gap-3 sm:flex-row sm:justify-between">';
+    $html .= '<p class="text-sm text-muted-foreground tabular-nums">Показаны <span class="font-semibold text-foreground">' . $from . '–' . $to . '</span> из ' . h(num_fmt($total)) . '</p>';
+    if ($pages <= 1) {
+        return $html . '</div>';
+    }
+    $arrow = static function (bool $enabled, int $target, string $rel, string $text, string $iconName) use ($href): string {
+        $inner = icon($iconName) . '<span class="sr-only">' . h($text) . '</span>';
+        return $enabled
+            ? '<li><a class="' . btn_class('outline', 'icon-sm') . '" href="' . h($href($target)) . '" rel="' . $rel . '">' . $inner . '</a></li>'
+            : '<li><span class="' . btn_class('outline', 'icon-sm') . ' pointer-events-none opacity-40" aria-disabled="true">' . $inner . '</span></li>';
+    };
+    $num = 'inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm font-medium tabular-nums transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+    $html .= '<nav aria-label="' . h($label) . '"><ul class="flex items-center gap-1">';
+    $html .= $arrow($page > 1, $page - 1, 'prev', 'Предыдущая страница', 'chevronleft');
+    foreach (page_window($page, $pages) as $p) {
+        if ($p === null) {
+            $html .= '<li class="px-1 text-sm text-muted-foreground" aria-hidden="true">…</li>';
+        } elseif ($p === $page) {
+            $html .= '<li><span class="' . $num . ' bg-foreground text-background" aria-current="page"><span class="sr-only">Страница </span>' . $p . '</span></li>';
+        } else {
+            $html .= '<li><a class="' . $num . ' text-muted-foreground hover:bg-muted hover:text-foreground" href="' . h($href($p)) . '"><span class="sr-only">Страница </span>' . $p . '</a></li>';
+        }
+    }
+    $html .= $arrow($page < $pages, $page + 1, 'next', 'Следующая страница', 'chevronright');
+    return $html . '</ul></nav></div>';
 }
 
 function progress_bar(int $pct, string $label = '', string $class = ''): string

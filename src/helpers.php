@@ -10,10 +10,18 @@ const SHIFT_TYPES = ['day', 'night', 'full'];
 const SHIFT_LABELS = ['day' => 'День', 'night' => 'Ночь', 'full' => 'Сутки'];
 const SHIFT_HINTS = ['day' => '08:00–20:00', 'night' => '20:00–08:00', 'full' => '08:00–08:00'];
 const SHIFT_ICONS = ['day' => 'sun', 'night' => 'moon', 'full' => 'sun-moon'];
+/*
+ * Вид графика (календарь или список) сотрудник выбирает сам, выбор хранится в браузере — как и тема.
+ * Скрипт стоит первым внутри блока графика и подставляет сохранённый вид до отрисовки, чтобы список не «мигал» календарём.
+ * Ключ хранилища тот же, что в assets/js/schedule.js.
+ */
+const SCHEDULE_VIEW_BOOT = "(function(){try{if(localStorage.getItem('gamerpro-schedule-view')!=='list')return;document.currentScript.parentNode.setAttribute('data-view','list');document.querySelectorAll('[data-view-set]').forEach(function(b){b.setAttribute('aria-pressed',b.getAttribute('data-view-set')==='list'?'true':'false')})}catch(e){}})();";
 const INCIDENT_KIND = ['tech' => 'Поломка', 'incident' => 'Происшествие'];
 const INCIDENT_STATUS = ['new' => 'Новая', 'in_progress' => 'В работе', 'done' => 'Закрыта'];
 const REVIEW_STATUS = ['pending' => 'Ждёт зачисления', 'credited' => 'Зачислено', 'rejected' => 'Отказ'];
-const REVIEW_KIND = ['text' => 'Текст', 'photo' => 'Фото', 'text_photo' => 'Текст + фото'];
+const REVIEW_KIND = ['text' => 'Текст', 'photo' => 'Фото', 'text_photo' => 'Текст + фото', 'import' => 'Перенос из таблицы'];
+/** Сколько строк журнала гостей (отзывы, компенсации) помещается на одной странице. */
+const GUEST_PAGE_SIZE = 10;
 const EXAM_KIND_LABELS = [
     'single' => 'Один верный вариант',
     'multiple' => 'Несколько верных',
@@ -437,6 +445,48 @@ function format_phone(string $raw): string
         return $raw;
     }
     return '+7 ' . substr($digits, 0, 3) . ' ' . substr($digits, 3, 3) . '-' . substr($digits, 6, 2) . '-' . substr($digits, 8, 2);
+}
+
+/**
+ * Разбор строки поиска по журналу гостей.
+ * digits заполняется, только если запрос похож на номер: цифры, пробелы, скобки, «+» и дефис.
+ * @return array{text: string, digits: string}
+ */
+function guest_search_needle(string $query): array
+{
+    $text = mb_strtolower(trim($query));
+    $digits = $text !== '' && preg_match('/^[\d\s()+\-]+$/', $text) ? (preg_replace('/\D+/', '', $text) ?? '') : '';
+    return ['text' => $text, 'digits' => $digits];
+}
+
+/**
+ * Подходит ли строка журнала под поиск.
+ * Номер ищется по цифрам в любом месте, а запрос с кодом страны — с начала номера:
+ * «+7 (900) 1» и «8900 1» находят один и тот же телефон. Текст ищется в $textCols без учёта регистра.
+ * Сравнение идёт в PHP, потому что SQLite и MySQL по-разному сравнивают регистр кириллицы.
+ */
+function guest_row_matches(array $row, array $needle, array $textCols): bool
+{
+    if ($needle['text'] === '') {
+        return true;
+    }
+    $digits = $needle['digits'];
+    if ($digits !== '') {
+        $raw = (string) ($row['guestPhone'] ?? '');
+        $phone = normalize_phone($raw) ?? (preg_replace('/\D+/', '', $raw) ?? '');
+        if (str_contains($phone, $digits)) {
+            return true;
+        }
+        if (strlen($digits) > 1 && ($digits[0] === '7' || $digits[0] === '8') && str_starts_with($phone, substr($digits, 1))) {
+            return true;
+        }
+    }
+    foreach ($textCols as $col) {
+        if (mb_stripos((string) ($row[$col] ?? ''), $needle['text']) !== false) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function boolish(mixed $v): bool

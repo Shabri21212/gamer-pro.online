@@ -1,6 +1,7 @@
 /*
- * График смен: фильтр по сотруднику, подсчёт смен за выделенный период,
- * окно дня и быстрое заполнение «кистью». Разметка — src/pages/shifts.php и shift_chip() в src/ui.php.
+ * График смен: вид «календарь / список», кнопка «Сегодня», фильтр по сотруднику,
+ * подсчёт смен за выделенный период, окно дня и быстрое заполнение «кистью».
+ * Разметка — src/pages/shifts.php и shift_chip() в src/ui.php, стили обоих видов — assets/css/src/schedule.css.
  */
 (function () {
   "use strict";
@@ -37,6 +38,53 @@
     if (!a || !b) return from + " — " + to;
     if (from === to) return a.d + " " + MONTHS[a.mo];
     return a.mo === b.mo ? a.d + "–" + b.d + " " + MONTHS[a.mo] : a.d + " " + MONTHS[a.mo] + " — " + b.d + " " + MONTHS[b.mo];
+  }
+
+  /* ---------- вид: календарь или список ---------- */
+
+  // Оба вида — одна и та же разметка, меняется только data-view. Сохранённый выбор при загрузке
+  // применяет SCHEDULE_VIEW_BOOT (src/helpers.php) — ключ хранилища у них общий.
+  var VIEW_KEY = "gamerpro-schedule-view";
+  function setView(view) {
+    grid.setAttribute("data-view", view);
+    all("[data-view-set]").forEach(function (btn) {
+      btn.setAttribute("aria-pressed", btn.getAttribute("data-view-set") === view ? "true" : "false");
+    });
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch (err) {}
+  }
+  all("[data-view-set]").forEach(function (btn) {
+    on(btn, "click", function () {
+      setView(btn.getAttribute("data-view-set") === "list" ? "list" : "month");
+    });
+  });
+
+  /* ---------- кнопка «Сегодня» ---------- */
+
+  // id="today" есть только у сегодняшнего дня открытого месяца. В другом месяце кнопка — обычная ссылка
+  // на текущий месяц с #today, и подсветка срабатывает уже после перехода.
+  var todayCell = document.getElementById("today");
+  function showToday(smooth) {
+    var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    todayCell.scrollIntoView({ block: "center", behavior: smooth && !calm ? "smooth" : "auto" });
+    todayCell.classList.remove("is-flash");
+    void todayCell.offsetWidth;
+    todayCell.classList.add("is-flash");
+    todayCell.focus({ preventScroll: true });
+  }
+  if (todayCell) {
+    on(todayCell, "animationend", function (e) {
+      if (e.animationName === "cal-flash") todayCell.classList.remove("is-flash");
+    });
+    on(one("[data-today-jump]"), "click", function (e) {
+      e.preventDefault();
+      showToday(true);
+    });
+    if (location.hash === "#today") {
+      showToday(false);
+      if (history.replaceState) history.replaceState(null, "", location.pathname + location.search);
+    }
   }
 
   /* ---------- фильтр по сотруднику ---------- */
@@ -229,9 +277,9 @@
       item.setAttribute("data-type", p.t);
       item.setAttribute("data-weight", p.t === "full" ? "2" : "1");
       item.innerHTML =
-        '<span class="cal-chip is-pending" data-tone="' + p.t + '">' + typeIcon(p.t) + '<span class="cal-chip-name"><span class="cal-chip-label"></span><span class="cal-name-short" aria-hidden="true"></span><span class="cal-name-full"></span></span></span>';
+        '<span class="cal-chip is-pending" data-tone="' + p.t + '">' + typeIcon(p.t) + '<span class="cal-chip-name"><span class="cal-chip-label"></span><span class="cal-name-initials" aria-hidden="true"></span><span class="cal-name-full"></span></span></span>';
       one('.cal-chip-label', item).textContent = p.hint;
-      one(".cal-name-short", item).textContent = p.short;
+      one(".cal-name-initials", item).textContent = p.initials;
       one(".cal-name-full", item).textContent = p.name;
       one(".cal-chip", item).title = p.name + " · " + p.hint + " · не сохранено";
       box.appendChild(item);
@@ -272,7 +320,7 @@
     } else if (saved && saved.getAttribute("data-type") === paintType) {
       pending[k] = { op: "remove", d: key, e: paintEmp.id };
     } else {
-      pending[k] = { op: "add", d: key, e: paintEmp.id, t: paintType, name: paintEmp.name, short: paintEmp.short, hint: typeBtn ? typeBtn.getAttribute("data-hint") || "" : "" };
+      pending[k] = { op: "add", d: key, e: paintEmp.id, t: paintType, name: paintEmp.name, initials: paintEmp.initials, hint: typeBtn ? typeBtn.getAttribute("data-hint") || "" : "" };
     }
     touched[key] = cell;
     renderCell(cell);
@@ -291,7 +339,7 @@
   }
 
   function pickEmp(src) {
-    paintEmp = src ? { id: src.getAttribute("data-paint-emp") || src.value, name: src.getAttribute("data-name") || "", short: src.getAttribute("data-short") || "" } : null;
+    paintEmp = src ? { id: src.getAttribute("data-paint-emp") || src.value, name: src.getAttribute("data-name") || "", initials: src.getAttribute("data-initials") || "" } : null;
   }
   function press(sel, el) {
     all(sel, paintPanel).forEach(function (b) {

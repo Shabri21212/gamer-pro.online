@@ -94,6 +94,9 @@
   --input: #d2d2d8;
   --ring: #d92d27;
   --brand: #e5322d;
+  /* Монограммы сотрудников: графитовая плашка с белыми инициалами */
+  --avatar: #1d1d21;
+  --avatar-foreground: #ffffff;
 
   /* Тёмные «геройские» панели — одинаково тёмные в обеих темах */
   --hero: #141416;
@@ -139,6 +142,9 @@
   --input: #36363c;
   --ring: #ff6a64;
   --brand: #ee3b35;
+  /* В тёмной теме плашка светлее карточки, иначе монограмма сливается с фоном */
+  --avatar: #303037;
+  --avatar-foreground: #f6f6f7;
 
   --hero: #19191c;
   --hero-edge: rgb(255 255 255 / 0.07);
@@ -184,6 +190,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-brand: var(--brand);
+  --color-avatar: var(--avatar);
+  --color-avatar-foreground: var(--avatar-foreground);
   --color-day: var(--day);
   --color-day-foreground: var(--day-foreground);
   --color-day-strong: var(--day-strong);
