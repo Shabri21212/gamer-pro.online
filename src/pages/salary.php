@@ -19,7 +19,7 @@ trait PagesSalary
         $period = in_array($selected, ['1', '2'], true) ? (int) $selected : ($month['isCurrent'] && (int) $data['at']->format('j') <= 15 ? 1 : 2);
         $p = $data['periods'][$period];
         $nav = '<div class="flex items-center gap-2"><a class="' . btn_class('outline', 'icon-sm') . '" aria-label="Предыдущий месяц" href="' . h(url_to('/salary', ['m' => $month['prev'], 'period' => $period])) . '">' . icon('chevronleft') . '</a><span class="text-sm font-semibold">' . h($month['title']) . '</span><a class="' . btn_class('outline', 'icon-sm') . '" aria-label="Следующий месяц" href="' . h(url_to('/salary', ['m' => $month['next'], 'period' => $period])) . '">' . icon('chevronright') . '</a></div>';
-        $html = page_head('Моя зарплата', 'Только ваши начисления. Будущие смены не входят в сумму к выплате.', $nav, 'Личное');
+        $html = page_head('Моя зарплата', '', $nav, 'Личное');
         $html .= segmented([
             ['href' => url_to('/salary', ['m' => $month['key'], 'period' => 1]), 'label' => '1–15 · ставка', 'active' => $period === 1],
             ['href' => url_to('/salary', ['m' => $month['key'], 'period' => 2]), 'label' => '16–' . substr($month['to'], 8, 2) . ' · ставка + процент', 'active' => $period === 2],
@@ -33,16 +33,15 @@ trait PagesSalary
         }
         $hero .= '</div></div>';
         $html .= card($hero, 'p-5 sm:p-6');
-        $html .= '<p class="text-sm leading-relaxed text-muted-foreground">Ставка начисляется в момент начала смены по графику: день и сутки — в 08:00, ночь — в 20:00, время Тюмени. С 1 по 15 — только ставка; с 16 до конца месяца — ставка и процент с продаж за 16–' . substr($month['to'], 8, 2) . '. Учитываются персональные ставки и проценты, отменённые продажи исключены. Это расчёт, не отметка о фактической выплате.</p>';
         if ($period === 2 && $data['warnings']) {
             $html .= '<div class="rounded-lg border border-border bg-muted p-4 text-sm text-foreground" role="status"><p class="font-semibold">Процент может быть неполным</p><ul class="mt-2 list-inside list-disc">';
             foreach ($data['warnings'] as $warning) {
                 $html .= '<li>' . h($warning) . '</li>';
             }
-            $html .= '</ul><p class="mt-2">Учитываются только загруженные продажи. Обновление — в разделе «Продажи и аналитика».</p></div>';
+            $html .= '</ul><p class="mt-2">Обновите продажи в разделе «Продажи и аналитика».</p></div>';
         }
         $html .= self::salaryFinesCard($p['deductions'], $p['fines']);
-        $body = card_head('Смены и начисления', 'За будущие выходы пока не начислено: ' . h(money_rub($p['future'])), '', 'calendar');
+        $body = card_head('Смены и начисления', 'За запланированные смены: ' . h(money_rub($p['future'])), '', 'calendar');
         if (!$p['shifts']) {
             $body .= '<p class="mt-4 text-sm text-muted-foreground">В этом периоде смен пока нет.</p>';
         } else {
@@ -80,7 +79,7 @@ trait PagesSalary
         $period = (int) $now->format('j') <= 15 ? 1 : 2;
         $p = $data['periods'][$period];
         $body = card_head('Моя зарплата', h(format_day_month($p['from']) . ' — ' . format_day_month($p['to'])), '<a class="' . btn_class('quiet', 'sm') . '" href="' . h(url_to('/salary')) . '">Расчёт ' . icon('arrow') . '</a>', 'wallet');
-        $body .= '<p class="mt-4 font-display text-2xl font-semibold tabular-nums">' . h(money_rub($p['total'])) . '</p><p class="mt-2 text-sm text-muted-foreground">Начислено за ' . h(plural($p['units'], 'смену', 'смены', 'смен')) . '. Будущие смены не включены.</p>';
+        $body .= '<p class="mt-4 font-display text-2xl font-semibold tabular-nums">' . h(money_rub($p['total'])) . '</p><p class="mt-2 text-sm text-muted-foreground">Начислено за ' . h(plural($p['units'], 'смену', 'смены', 'смен')) . '.</p>';
         $fines = array_merge($data['periods'][1]['deductions'], $data['periods'][2]['deductions']);
         return card($body, 'p-5') . self::salaryFinesCard($fines, $data['periods'][1]['fines'] + $data['periods'][2]['fines']);
     }

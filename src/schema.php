@@ -17,7 +17,7 @@ declare(strict_types=1);
  */
 require_once __DIR__ . '/branch-upgrade.php';
 
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 const SCHEMA = [
     'app_meta' => [
@@ -481,6 +481,9 @@ final class Schema
         }
         try {
             BranchUpgrade::run($pdo);
+            if (self::storedVersion($pdo) < 10) {
+                BranchUpgrade::migrateV10($pdo);
+            }
             $pdo->prepare('DELETE FROM app_meta WHERE k = ?')->execute(['schema']);
             $pdo->prepare('INSERT INTO app_meta (k, v) VALUES (?, ?)')->execute(['schema', (string) SCHEMA_VERSION]);
         } catch (PDOException $e) {

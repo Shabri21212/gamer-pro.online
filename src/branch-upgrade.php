@@ -3,6 +3,25 @@ declare(strict_types=1);
 
 final class BranchUpgrade
 {
+    public static function migrateV10(PDO $pdo): void
+    {
+        $findBranch = $pdo->prepare('SELECT id FROM branches WHERE slug = ?');
+        $findBranch->execute(['gondatti']);
+        $branchId = $findBranch->fetchColumn();
+        if ($branchId === false) {
+            return;
+        }
+        $findSettings = $pdo->prepare('SELECT id FROM langame_settings WHERE "branchId" = ?');
+        $findSettings->execute([$branchId]);
+        $settingsId = $findSettings->fetchColumn();
+        $baseUrl = 'https://463.langame.ru/public_api';
+        if ($settingsId === false) {
+            $pdo->prepare('INSERT INTO langame_settings ("branchId", "baseUrl", "isEnabled", "updatedAt") VALUES (?, ?, ?, ?)')->execute([$branchId, $baseUrl, 0, now_iso()]);
+        } else {
+            $pdo->prepare('UPDATE langame_settings SET "baseUrl" = ?, "updatedAt" = ? WHERE id = ?')->execute([$baseUrl, now_iso(), $settingsId]);
+        }
+    }
+
     /** Повторный запуск безопасен: существующие цены, статьи и подключения не заменяются. */
     public static function run(PDO $pdo): void
     {

@@ -37,7 +37,7 @@ trait PagesGuests
     private static function decideForm(string $action, int $id): string
     {
         return form_open($action, 'class="flex flex-wrap gap-1.5"') . hidden('id', $id)
-            . '<button name="decision" value="credited" class="' . btn_class('ink', 'xs') . '" ' . confirm_attr('Вы уже начислили бонусы в Langame? Эта кнопка только отмечает выполнение в CRM и не меняет баланс гостя.') . '>' . icon('check', 'size-3.5') . 'Отметить зачисление</button>'
+            . '<button name="decision" value="credited" class="' . btn_class('ink', 'xs') . '" ' . confirm_attr('Бонусы уже начислены в Langame? Подтвердить отметку в CRM?') . '>' . icon('check', 'size-3.5') . 'Отметить зачисление</button>'
             . '<button name="decision" value="rejected" class="' . btn_class('danger', 'xs') . '" ' . confirm_attr('Отказать в бонусах?') . '>Отказ</button></form>';
     }
 
@@ -59,7 +59,7 @@ trait PagesGuests
         }
         $actions = can($user, 'content.edit') ? '<a class="' . btn_class('outline') . '" href="' . h(url_to('/reviews/edit')) . '">' . icon('sliders', 'size-4') . 'Условия акции</a>' : '';
         $html = page_head('Бонусы за отзывы', h((string) $promo['intro']), $actions);
-        $html .= '<p class="text-sm leading-relaxed text-muted-foreground">Начисление выполняется вручную в Langame на бонусный баланс. Кнопка «Отметить зачисление» фиксирует результат в CRM: в публичном API нет документированного метода пополнения.</p>';
+        $html .= '<p class="text-sm leading-relaxed text-muted-foreground">Бонусы начисляются вручную в Langame.</p>';
         $html .= '<div class="grid items-start gap-6 lg:grid-cols-[21rem_minmax(0,1fr)]">';
 
         $form = form_open('save_review', 'class="flex flex-col gap-4" data-review-form data-submit-once');
@@ -118,7 +118,7 @@ trait PagesGuests
     private static function pageCompensations(array $user): void
     {
         [$rows, $status, $tabs, $branchNav] = self::guestRows('compensations', '/compensations');
-        $html = page_head('Компенсации гостям', 'Если у гостя что-то пошло не так по вине клуба — запишите, что случилось и что вы сделали. Бонусы зачисляет ответственный вручную в Langame. CRM фиксирует результат, но не меняет баланс через API.');
+        $html = page_head('Компенсации гостям', 'Учёт компенсаций. Начисление бонусов — вручную в Langame.');
         $html .= '<div class="grid items-start gap-6 lg:grid-cols-[21rem_minmax(0,1fr)]">';
 
         $form = form_open('save_comp', 'class="flex flex-col gap-4" data-submit-once');

@@ -68,7 +68,7 @@ trait BarWorkspace
     private static function barOccupancy(array $branch, ?array $live): string
     {
         if (!$live || $live['active'] === null) {
-            return '<section class="crm-empty">' . icon('monitor', 'size-8') . '<h2>Нет данных о сессиях</h2><p>Langame не вернул текущее состояние клуба. Это не означает, что зал пуст. Проверьте доступ к API или повторите просмотр позднее.</p></section>';
+            return '<section class="crm-empty">' . icon('monitor', 'size-8') . '<h2>Нет данных о сессиях</h2><p>Не удалось загрузить данные из Langame. Проверьте подключение.</p></section>';
         }
         if (!empty($live['sessionsPartial'])) {
             return '<section class="crm-empty"><h2>Получена только часть сессий</h2><p>API вернул больше записей, чем лимит одной загрузки. Не показываем неполную выборку как достоверную загрузку клуба.</p></section>';

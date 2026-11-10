@@ -142,7 +142,7 @@ trait PagesManage
         $xp = self::examXpState(self::examCatalog($user));
 
         $actions = form_open('logout') . '<button class="' . btn_class('outline') . '">' . icon('logout', 'size-4') . 'Выйти</button></form>';
-        $html = page_head('Мой профиль', 'Ваши данные, права в портале и смена пароля.', $actions, 'Личное');
+        $html = page_head('Мой профиль', '', $actions, 'Личное');
 
         $id = '<div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-5">' . avatar($name, 'size-16 text-lg');
         $id .= '<div class="flex min-w-0 flex-1 flex-col gap-2"><h2 class="font-display text-xl leading-tight font-semibold text-balance">' . h($name) . '</h2>';
@@ -206,7 +206,7 @@ trait PagesManage
         $right = card($ex, 'p-5');
 
         if ($eid) {
-            $fi = card_head('Штрафы', h($fines ? 'За ' . $mon . ' — ' . money_rub($finesMonth) . '. Ниже — последние назначения.' : 'Штрафов нет — так держать'), '<a class="' . btn_class('ghost', 'sm') . '" href="' . h(url_to('/fines')) . '">Лист' . icon('arrow', 'size-4') . '</a>', 'wallet');
+            $fi = card_head('Штрафы', h($fines ? 'За ' . $mon . ' — ' . money_rub($finesMonth) : 'Штрафов нет'), '<a class="' . btn_class('ghost', 'sm') . '" href="' . h(url_to('/fines')) . '">Лист' . icon('arrow', 'size-4') . '</a>', 'wallet');
             if ($fines) {
                 $fi .= '<ul class="mt-4 flex flex-col divide-y divide-border">';
                 foreach (array_slice($fines, 0, 3) as $f) {
@@ -218,7 +218,7 @@ trait PagesManage
         }
 
         $pw = form_open('change_password', 'class="flex flex-col gap-4" data-submit-once');
-        $pw .= card_head('Смена пароля', 'Не короче 8 символов. После смены входите с новым паролем.', '', 'lock');
+        $pw .= card_head('Смена пароля', 'Не менее 8 символов', '', 'lock');
         $pw .= ui_field('Текущий пароль', self::passwordInput('current', 'current-password'));
         $pw .= ui_field('Новый пароль', self::passwordInput('next', 'new-password', 'minlength="8" maxlength="72"'));
         $pw .= ui_field('Повторите новый пароль', self::passwordInput('confirm', 'new-password', 'minlength="8" maxlength="72"'));
@@ -810,7 +810,7 @@ trait PagesManage
             $total += (int) $n;
         }
         $isMysql = $driver === 'mysql';
-        $html = page_head('База данных', 'Резервная копия портала и перенос на хостинг reg.ru одним файлом.');
+        $html = page_head('База данных', 'Резервные копии');
 
         $html .= '<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">';
         $html .= stat_tile('Где хранится', $isMysql ? 'MySQL' : 'SQLite', $isMysql ? 'база на хостинге' : 'файл storage/' . h(basename(Db::path())), '', 'database');
@@ -819,23 +819,9 @@ trait PagesManage
         $html .= stat_tile('Сотрудников', (string) (int) ($counts['employees'] ?? 0), plural((int) ($counts['user'] ?? 0), 'доступ', 'доступа', 'доступов') . ' в портал', '', 'users');
         $html .= '</div>';
 
-        $dl = card_head('Скачать localhost.sql', 'Полная копия: сотрудники, график, штрафы, экзамены, база знаний и пароли (в виде хешей — сами пароли не узнать). Подходит для MySQL 8 и MariaDB.', '', 'download');
+        $dl = card_head('Скачать localhost.sql', 'Полная копия данных · MySQL 8 / MariaDB', '', 'download');
         $dl .= form_open('download_dump', 'class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center"') . '<button class="' . btn_class('primary', 'lg') . '">' . icon('download', 'size-4') . 'Скачать localhost.sql</button>';
-        $dl .= '<p class="text-xs leading-relaxed text-muted-foreground">Файл собирается из текущих данных в момент нажатия. Храните его в надёжном месте — в нём доступы сотрудников.</p></form>';
-
-        $steps = [
-            ['В панели reg.ru', 'Откройте «Хостинг» → «Базы данных MySQL». Создайте базу и пользователя или возьмите су��ествующую, например <span class="font-mono">u3622481_default</span>.'],
-            ['Импорт в phpMyAdmin', 'Войдите в phpMyAdmin, слева выберите базу → вкладка «Импорт» → выберите <span class="font-mono">localhost.sql</span> → «Вперёд». Таблицы портала создадутся заново.'],
-            ['Файлы сайта', 'Залейте папку портала в корень сайта (обычно <span class="font-mono">public_html</span>) вместе со скрытым файлом <span class="font-mono">.htaccess</span>. Версия PHP — 8.1 или новее.'],
-            ['Подключение к базе', 'Скопируйте <span class="font-mono">config.example.php</span> в <span class="font-mono">config.php</span> и впишите имя базы, пользователя и пароль из панели reg.ru.'],
-            ['Вход', 'Откройте сайт и войдите своим логином — пароли у всех сотрудников остаются прежними.'],
-        ];
-        $how = card_head('Как перенести на reg.ru', 'Пять шагов, около десяти минут', '', 'info');
-        $how .= '<ol class="mt-5 flex flex-col gap-4">';
-        foreach ($steps as $i => [$title, $text]) {
-            $how .= '<li class="flex gap-3"><span class="cut flex size-7 shrink-0 items-center justify-center bg-foreground font-display text-xs font-semibold text-background tabular-nums" style="--cut:6px">' . ($i + 1) . '</span><div class="flex min-w-0 flex-col gap-0.5"><p class="text-sm font-semibold">' . h($title) . '</p><p class="text-sm leading-relaxed text-muted-foreground">' . $text . '</p></div></li>';
-        }
-        $how .= '</ol>';
+        $dl .= '<p class="text-xs leading-relaxed text-muted-foreground">Содержит данные сотрудников. Не передавайте посторонним.</p></form>';
 
         $list = '<ul class="grid divide-y divide-border sm:grid-cols-2 sm:divide-y-0">';
         foreach ($counts as $t => $n) {
@@ -843,7 +829,7 @@ trait PagesManage
         }
         $list .= '</ul>';
 
-        $html .= '<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><div class="flex min-w-0 flex-col gap-6">' . card($dl, 'p-5') . self::collapsible('Что внутри', (string) count(SCHEMA), $list, 'table') . '</div>' . card($how, 'p-5') . '</div>';
+        $html .= card($dl, 'p-5') . self::collapsible('Таблицы', (string) count(SCHEMA), $list, 'table');
         self::layout($user, $html, ['title' => 'База данных']);
     }
 }

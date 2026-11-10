@@ -48,7 +48,7 @@ trait PagesShifts
 
         $html = '<header class="flex flex-col gap-2">' . eyebrow($dateLabel);
         $html .= '<h1 class="font-display text-2xl leading-tight font-semibold tracking-tight text-balance sm:text-[2rem]">' . h(self::greeting($now)) . (($user['role'] ?? '') === 'owner' ? '' : ', ' . h(first_name($name))) . '</h1>';
-        $html .= '<p class="flex items-center gap-2 text-sm text-muted-foreground">' . icon('clock', 'size-4') . '<span>Сейчас <time data-clock class="font-semibold text-foreground tabular-nums">' . $now->format('H:i') . '</time> по времени клуба</span></p></header>';
+        $html .= '<p class="flex items-center gap-2 text-sm text-muted-foreground">' . icon('clock', 'size-4') . '<span>Сейчас <time data-clock class="font-semibold text-foreground tabular-nums">' . $now->format('H:i') . '</time></span></p></header>';
         $html .= self::clubLoadPanel();
 
         $html .= '<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">';
@@ -114,7 +114,7 @@ trait PagesShifts
         $html .= '<img src="' . h(asset('img/club/hall-wide-sm.webp')) . '" alt="" class="pointer-events-none absolute inset-y-0 right-0 hidden h-full w-1/2 object-cover opacity-25 [mask-image:linear-gradient(to_left,black,transparent)] sm:block" aria-hidden="true">';
         $html .= '<div class="relative flex flex-wrap items-center justify-between gap-3"><p class="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-sidebar-muted uppercase"><span class="cut-mark" aria-hidden="true"></span>Моя смена</p>';
         if (!$s) {
-            $html .= '</div><div class="relative flex flex-col gap-2"><p id="my-shift-title" class="font-display text-2xl font-semibold">Смен пока нет</p><p class="max-w-md text-sm leading-relaxed text-sidebar-foreground">В ближайшие три недели вас нет в графике. Если вышли за кого-то — попросите поставить смену.</p></div>';
+            $html .= '</div><div class="relative flex flex-col gap-2"><p id="my-shift-title" class="font-display text-2xl font-semibold">Смен пока нет</p><p class="max-w-md text-sm leading-relaxed text-sidebar-foreground">На ближайшие три недели смены не назначены.</p></div>';
             $html .= '<a href="' . h(url_to('/schedule')) . '" class="relative inline-flex w-fit items-center gap-1.5 text-sm font-semibold hover:text-brand">Открыть график ' . icon('arrow', 'size-4') . '</a></section>';
             return $html;
         }
@@ -522,7 +522,7 @@ trait PagesShifts
         }
 
         $switch = $seeAll ? self::branchSwitch('/schedule', $branch, ['m' => $monthParam]) : chip($branch['name'], 'outline', 'building');
-        $html = page_head('График смен', 'Команда по дням. Нажмите на дату, чтобы посмотреть смены' . ($canEdit ? ' или изменить состав.' : '.') . ' Время — Тюмень.', $switch);
+        $html = page_head('График смен', '', $switch);
 
         $monthHref = static fn (?string $m): string => h(url_to('/schedule', ['branch' => $branch['slug'], 'm' => $m]));
         $html .= '<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3"><div class="flex items-center gap-1.5">';
@@ -748,7 +748,7 @@ trait PagesShifts
             }
         }
 
-        $html = page_head('Чистка клавиатур', 'Каждое место чистится раз в неделю. Нажми��е на место после чистки — отметка сохранится за вами.', self::branchSwitch('/cleaning', $branch, ['w' => $week]));
+        $html = page_head('Чистка клавиатур', 'Еженедельная чистка рабочих мест', self::branchSwitch('/cleaning', $branch, ['w' => $week]));
         $html .= '<div class="flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-2">';
         $html .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/cleaning', ['branch' => $branch['slug'], 'w' => add_days($week, -7)])) . '" aria-label="Предыдущая неделя">' . icon('chevronleft') . '</a>';
         $html .= '<h2 class="min-w-44 text-center font-display text-lg font-semibold tracking-tight">' . h(week_label($week)) . '</h2>';

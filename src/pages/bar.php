@@ -44,9 +44,9 @@ trait PagesBar
             }
         }
         if (!$branch) {
-            $html = page_head('Продажи бара', 'Здесь будет видно, сколько вы продали в баре и сколько из этого ваш процент.');
+            $html = page_head('Продажи бара');
             $action = $user['isOwner'] ? '<a class="' . btn_class() . '" href="' . h(url_to('/manage/langame')) . '">' . icon('link', 'size-4') . 'Подключить Langame</a>' : '';
-            $html .= empty_state('coins', 'Langame пока не подключён', $user['isOwner'] ? 'Вставьте серверный токен Langame для филиала — продажи начнут подтягиваться автоматически.' : 'Как только владелец подключит Langame, здесь появятся ваши продажи.', $action);
+            $html .= empty_state('coins', 'Langame пока не подключён', $user['isOwner'] ? 'Укажите токен в настройках филиала.' : 'Обратитесь к владельцу для подключения.', $action);
             self::layout($user, $html, ['title' => 'Продажи бара']);
             return;
         }
@@ -84,7 +84,7 @@ trait PagesBar
         if ($seeAll) {
             $branchTabs = self::barViewSwitch($branch, $month, 'me') . $branchTabs;
         }
-        $html = page_head('Продажи бара', 'Всё, что вы пробили в Langame на своей смене, — и ваш процент с этого. Обновляется само каждые ' . (Langame::AUTO_SYNC_SECONDS / 60) . ' минуты.', $branchTabs, $branch['name']);
+        $html = page_head('Продажи бара', 'Обновление каждые ' . (Langame::AUTO_SYNC_SECONDS / 60) . ' мин', $branchTabs, $branch['name']);
 
         $hero = '<section class="relative isolate overflow-hidden hero-panel rounded-xl text-sidebar-foreground shadow-sm">';
         $hero .= '<img src="' . h(asset('img/club/lounge.webp')) . '" srcset="' . h(asset('img/club/lounge-sm.webp')) . ' 800w, ' . h(asset('img/club/lounge.webp')) . ' 1600w" sizes="(min-width: 1024px) 60vw, 100vw" alt="" aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 size-full object-cover opacity-35 [mask-image:linear-gradient(to_left,black_10%,transparent_85%)]">';
@@ -101,9 +101,9 @@ trait PagesBar
             }
         } else {
             $hero .= '<div class="flex max-w-md flex-col gap-2"><p class="font-display text-2xl font-semibold text-balance">Учётка Langame ещё не привязана</p>';
-            $hero .= '<p class="text-sm leading-relaxed text-sidebar-foreground/70 text-pretty">Попросите владельца связать вашу запись в портале с вашим логином в админке Langame — после этого здесь появятся ваши продажи.</p></div>';
+            $hero .= '<p class="text-sm leading-relaxed text-sidebar-foreground/70 text-pretty">Обратитесь к владельцу для привязки учётной записи.</p></div>';
         }
-        $hero .= '<p class="text-sm leading-relaxed text-sidebar-foreground/70">Это процент по всем продажам выбранного месяца. В зарплату входят продажи с 16-го числа. <a class="font-semibold underline underline-offset-4" href="' . h(url_to('/salary', ['m' => $month['key']])) . '">Открыть расчёт зарплаты</a></p>';
+        $hero .= '<p class="text-sm leading-relaxed text-sidebar-foreground/70">Процент за месяц · в зарплату — продажи с 16-го числа. <a class="font-semibold underline underline-offset-4" href="' . h(url_to('/salary', ['m' => $month['key']])) . '">Открыть расчёт зарплаты</a></p>';
         $hero .= '</div></section>';
 
         $nav = '<div class="flex items-center gap-1"><a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/bar', ['branch' => $branch['slug'], 'm' => $month['prev'], 'view' => 'me'])) . '" aria-label="Предыдущий месяц">' . icon('chevronleft') . '</a>';
@@ -260,13 +260,13 @@ trait PagesBar
         $ready = $connected && (!empty($s['syncedFrom']) || boolish($s['lastSyncOk'] ?? false));
         $content = null;
         if ($tab === 'salary') {
-            $content = '<p class="crm-notice">Расчёт по начавшимся сменам: будущие выходы не начисляются. 1–15 — ставка; 16–конец месяца — ставка и процент с продаж за вторую половину месяца. Это не подтверждение фактической выплаты.' . (!$ready ? ' Продажи выбранного филиала не синхронизированы — процент с бара может быть неполным.' : '') . '</p>' . self::barPayroll($user, $month, $q);
+            $content = (!$ready ? '<p class="crm-notice">Продажи не синхронизированы. Процент с бара может быть неполным.</p>' : '') . self::barPayroll($user, $month, $q);
         } elseif (!$connected) {
             $content = self::barUnavailable($user);
         } elseif ($tab === 'occupancy') {
             $content = self::barOccupancy($branch, Langame::live($bid));
         } elseif (!$ready) {
-            $content = '<section class="crm-empty"><h2>Ожидаем первую синхронизацию</h2><p>Подключение настроено. Нажмите «Обновить продажи», чтобы загрузить данные. До этого итоги не отображаются.</p></section>';
+            $content = '<section class="crm-empty"><h2>Ожидаем первую синхронизацию</h2><p>Нажмите «Обновить продажи» для загрузки данных.</p></section>';
         } elseif ($tab === 'sales') {
             $content = self::barLedger($branch, $month, $base);
         } elseif ($tab === 'goods') {
@@ -523,7 +523,7 @@ trait PagesBar
         $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['gross'])) . '</td><td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['barRev'])) . '</td>';
         $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['bar'])) . '</td><td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['fines'])) . '</td>';
         $t .= '<td class="px-4 py-3 text-right font-display whitespace-nowrap tabular-nums">' . h(money_rub($sum['total'])) . '</td></tr></tfoot></table></div>';
-        $t .= '<p class="mt-4 text-xs leading-relaxed text-muted-foreground">Начисляются только начавшиеся смены, сутки считаются за две. Для прошедших смен используется история ставок; столбец «Ставка» показывает текущую. Процент с бара — с продаж за 16–конец месяца, без отмен. Штрафы — выписанные за этот месяц.</p>';
+        $t .= '<p class="mt-4 text-xs leading-relaxed text-muted-foreground">Начисления — по начавшимся сменам и ставкам на дату выхода. Сутки — две смены. Процент с бара — с 16-го числа.</p>';
 
         return $html . card($head . $t, 'p-5');
     }
@@ -548,7 +548,7 @@ trait PagesBar
 
     private static function pageLangame(array $user): void
     {
-        $html = page_head('Подключение Langame', 'Токен хранится в базе только в зашифрованном виде и больше нигде не показывается. Здесь же — процент с бара и привязка администраторов Langame к сотрудникам портала.', '<a class="' . btn_class('outline') . '" href="' . h(url_to('/bar')) . '">' . icon('coins', 'size-4') . 'Продажи бара</a>');
+        $html = page_head('Подключение Langame', '', '<a class="' . btn_class('outline') . '" href="' . h(url_to('/bar')) . '">' . icon('coins', 'size-4') . 'Продажи бара</a>');
 
         $empOptions = ['' => '— не привязан —'];
         $byBranch = [];
@@ -569,10 +569,10 @@ trait PagesBar
             $c = card_head($b['name'], $s && $s['lastSyncAt'] ? 'Обновлено ' . h(format_dt((string) $s['lastSyncAt'])) . (!boolish($s['lastSyncOk']) && !empty($s['lastError']) ? ' · <span class="text-primary-ink">' . h((string) $s['lastError']) . '</span>' : '') : 'Синхронизаций ещё не было', $status, 'link');
 
             $c .= form_open('save_langame', 'class="mt-5 flex flex-col gap-4" autocomplete="off"') . hidden('branchId', $b['id']);
-            $c .= ui_field('Адрес клуба в Langame', '<input name="baseUrl" type="url" inputmode="url" class="' . field_class() . '" maxlength="255" placeholder="' . h(Langame::BASE_EXAMPLE) . '" value="' . h((string) ($s['baseUrl'] ?? '')) . '">', 'Номер клуба в адресе — как в ссылке на вашу админку Langame');
-            $tokenHint = $hasToken ? 'Сохранён токен ' . h((string) ($s['tokenHint'] ?? '')) . '. Оставьте п��ле пустым, чтобы не менять.' : 'Серверный ключ (X-Request-Token) из настроек Langame.';
+            $c .= ui_field('Адрес клуба в Langame', '<input name="baseUrl" type="url" inputmode="url" class="' . field_class() . '" maxlength="255" placeholder="' . h(Langame::BASE_EXAMPLE) . '" value="' . h((string) ($s['baseUrl'] ?? '')) . '">');
+            $tokenHint = $hasToken ? 'Сохранён токен ' . h((string) ($s['tokenHint'] ?? '')) . '. Пустое поле — без изменений.' : 'Серверный ключ (X-Request-Token) из настроек Langame.';
             $c .= ui_field('Секретный токен', '<input name="token" type="password" class="' . field_class('font-mono') . '" maxlength="512" autocomplete="new-password" spellcheck="false" placeholder="' . ($hasToken ? '••••••••••••' : 'Вставьте токен') . '">', $tokenHint);
-            $c .= ui_field('Количество компьютеров', '<input name="pcCount" type="number" min="0" max="500" class="' . field_class('max-w-40') . '" value="' . (int) $b['pcCount'] . '" required>', 'Для чистки и расчёта загрузки. 0 — количество пока не указано; консоли не включать.');
+            $c .= ui_field('Количество компьютеров', '<input name="pcCount" type="number" min="0" max="500" class="' . field_class('max-w-40') . '" value="' . (int) $b['pcCount'] . '" required>', 'Без консолей. 0 — не указано.');
             $c .= '<div class="flex flex-wrap items-end gap-4">';
             $c .= ui_field('Процент с бара по умолчанию', '<div class="relative"><input name="barPercent" type="number" inputmode="decimal" min="0" max="100" step="0.1" class="' . field_class('pr-8 tabular-nums') . '" value="' . h(rtrim(rtrim(number_format(((int) ($s['barPercentX10'] ?? 0)) / 10, 1, '.', ''), '0'), '.')) . '"><span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">%</span></div>', '', 'w-44');
             $c .= '<label class="flex cursor-pointer items-center gap-2 pb-2.5 text-sm font-medium"><input type="checkbox" name="isEnabled" value="1" class="' . check_class() . '"' . ($on || !$s ? ' checked' : '') . '>Подтягивать продажи</label></div>';
@@ -589,7 +589,7 @@ trait PagesBar
             if ($staff) {
                 $totals = Langame::totalsByEmployee($month['from'], $month['to'], $b['id']);
                 $unlinked = Langame::unlinkedRevenue($b['id'], $month['from'], $month['to']);
-                $m .= card_head('Администраторы Langame', 'Кто под какой учёткой пробивает бар. Пустой процент — значит по умолчанию.', '', 'users');
+                $m .= card_head('Администраторы Langame', 'Пустой процент — ставка филиала', '', 'users');
                 if ($unlinked > 0) {
                     $m .= '<p class="mt-4 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary-ink">За ' . h($month['name']) . ' ' . h(kop_rub($unlinked)) . ' продаж ни к кому не привязано — проверьте список ниже.</p>';
                 }
