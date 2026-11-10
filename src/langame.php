@@ -225,11 +225,23 @@ final class Langame
                 $count++;
                 $name = mb_substr(trim((string) ($u['username'] ?? '')), 0, 191);
                 $login = mb_substr(trim((string) ($u['email'] ?? '')), 0, 191);
+                $status = mb_substr(trim((string) ($u['admin_status'] ?? '')), 0, 64);
+                $verified = array_key_exists('verified', $u) && $u['verified'] !== null ? (int) $u['verified'] : 1;
+                $active = $verified !== 0 && !preg_match('/увол|удал|архив|заблок|fired|deleted/iu', $status) ? 1 : 0;
+                $lastLogin = (int) ($u['last_login'] ?? 0) ?: null;
                 $exists = Db::value('SELECT id FROM langame_staff WHERE "branchId" = ? AND "langameUserId" = ?', [$bid, $uid]);
-                if ($exists) {
-                    Db::exec('UPDATE langame_staff SET "langameName" = ?, "langameLogin" = ? WHERE id = ?', [$name, $login, $exists]);
-                } else {
-                    Db::insertIgnore('langame_staff', ['branchId' => $bid, 'langameUserId' => $uid, 'langameName' => $name, 'langameLogin' => $login, 'updatedAt' => now_iso()]);
+                try {
+                    if ($exists) {
+                        Db::exec('UPDATE langame_staff SET "langameName" = ?, "langameLogin" = ?, "isActive" = ?, "adminStatus" = ?, "lastLoginAt" = ? WHERE id = ?', [$name, $login, $active, $status, $lastLogin, $exists]);
+                    } else {
+                        Db::insertIgnore('langame_staff', ['branchId' => $bid, 'langameUserId' => $uid, 'langameName' => $name, 'langameLogin' => $login, 'isActive' => $active, 'adminStatus' => $status, 'lastLoginAt' => $lastLogin, 'updatedAt' => now_iso()]);
+                    }
+                } catch (PDOException) {
+                    if ($exists) {
+                        Db::exec('UPDATE langame_staff SET "langameName" = ?, "langameLogin" = ? WHERE id = ?', [$name, $login, $exists]);
+                    } else {
+                        Db::insertIgnore('langame_staff', ['branchId' => $bid, 'langameUserId' => $uid, 'langameName' => $name, 'langameLogin' => $login, 'updatedAt' => now_iso()]);
+                    }
                 }
             }
         }
@@ -431,6 +443,289 @@ final class Langame
         } catch (PDOException) {
             return [];
         }
+    }
+
+    /* ---------- сводка для владельца ---------- */
+
+    /**
+     * Продажи филиала по сотрудникам, включая отмены. Ключ 0 — продажи без привязки.
+     * @return array<int, array{revenue: int, qty: int, lines: int, cancelAmount: int, cancelCount: int, cashless: int, percentX10: int, earn: int}>
+     */
+    public static function teamStats(int $branchId, string $from, string $to): array
+    {
+        try {
+            $rows = Db::all(
+                'SELECT l."employeeId" AS eid, l."percentX10" AS pct, st."barPercentX10" AS def,
+                        SUM(CASE WHEN s."isCancelled" = 0 THEN s."amountX100" ELSE 0 END) AS revenue,
+                        SUM(CASE WHEN s."isCancelled" = 0 THEN s.qty ELSE 0 END) AS qty,
+                        SUM(CASE WHEN s."isCancelled" = 0 THEN 1 ELSE 0 END) AS cnt,
+                        SUM(CASE WHEN s."isCancelled" = 1 THEN s."amountX100" ELSE 0 END) AS "cancelAmount",
+                        SUM(CASE WHEN s."isCancelled" = 1 THEN 1 ELSE 0 END) AS "cancelCount",
+                        SUM(CASE WHEN s."isCancelled" = 0 AND s."isCashless" = 1 THEN s."amountX100" ELSE 0 END) AS cashless
+                 FROM bar_sales s
+                 JOIN langame_settings st ON st."branchId" = s."branchId"
+                 LEFT JOIN langame_shifts w ON w."branchId" = s."branchId" AND w."extId" = s."shiftExtId"
+                 LEFT JOIN langame_staff l ON l."branchId" = s."branchId" AND l."langameUserId" = w."langameUserId"
+                 WHERE s."branchId" = ? AND s."saleAt" >= ? AND s."saleAt" <= ?
+                 GROUP BY l."employeeId", l."percentX10", st."barPercentX10"',
+                [$branchId, $from, $to . ' 23:59:59'],
+            );
+        } catch (PDOException) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $r) {
+            $eid = $r['eid'] !== null ? (int) $r['eid'] : 0;
+            $pct = $r['pct'] !== null ? (int) $r['pct'] : (int) $r['def'];
+            $rev = (int) $r['revenue'];
+            $cur = $out[$eid] ?? ['revenue' => 0, 'qty' => 0, 'lines' => 0, 'cancelAmount' => 0, 'cancelCount' => 0, 'cashless' => 0, 'percentX10' => $pct, 'earn' => 0];
+            $cur['revenue'] += $rev;
+            $cur['qty'] += (int) $r['qty'];
+            $cur['lines'] += (int) $r['cnt'];
+            $cur['cancelAmount'] += (int) $r['cancelAmount'];
+            $cur['cancelCount'] += (int) $r['cancelCount'];
+            $cur['cashless'] += (int) $r['cashless'];
+            $cur['earn'] += $eid > 0 ? (int) round($rev * $pct / 1000) : 0;
+            $cur['percentX10'] = $pct;
+            $out[$eid] = $cur;
+        }
+        return $out;
+    }
+
+    /** Число смен Langame за период по сотрудникам портала. @return array<int, int> */
+    public static function shiftCounts(int $branchId, string $from, string $to): array
+    {
+        try {
+            $rows = Db::all(
+                'SELECT l."employeeId" AS eid, COUNT(*) AS n FROM langame_shifts w
+                 JOIN langame_staff l ON l."branchId" = w."branchId" AND l."langameUserId" = w."langameUserId"
+                 WHERE w."branchId" = ? AND l."employeeId" IS NOT NULL AND w."dateStart" >= ? AND w."dateStart" <= ?
+                 GROUP BY l."employeeId"',
+                [$branchId, $from, $to . ' 23:59:59'],
+            );
+        } catch (PDOException) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int) $r['eid']] = (int) $r['n'];
+        }
+        return $out;
+    }
+
+    /** Продажи филиала с фильтром: отменённые или крупные (от $minKop). */
+    public static function branchSales(int $branchId, string $from, string $to, string $kind, int $minKop = 0, int $limit = 8): array
+    {
+        $cond = $kind === 'cancelled' ? 's."isCancelled" = 1' : 's."isCancelled" = 0 AND s."amountX100" >= ' . max(0, $minKop);
+        $order = $kind === 'cancelled' ? 's."saleAt" DESC' : 's."amountX100" DESC, s."saleAt" DESC';
+        try {
+            return Db::all(
+                'SELECT s."saleAt", s.qty, s."amountX100", s."isCashless", p.name AS "goodsName", l."employeeId" AS eid, l."langameName" AS "staffName"
+                 FROM bar_sales s
+                 LEFT JOIN langame_shifts w ON w."branchId" = s."branchId" AND w."extId" = s."shiftExtId"
+                 LEFT JOIN langame_staff l ON l."branchId" = s."branchId" AND l."langameUserId" = w."langameUserId"
+                 LEFT JOIN langame_products p ON p."branchId" = s."branchId" AND p."extId" = s."goodsId"
+                 WHERE s."branchId" = ? AND ' . $cond . ' AND s."saleAt" >= ? AND s."saleAt" <= ?
+                 ORDER BY ' . $order . ' LIMIT ' . max(1, min(50, $limit)),
+                [$branchId, $from, $to . ' 23:59:59'],
+            );
+        } catch (PDOException) {
+            return [];
+        }
+    }
+
+    /** Топ позиций всего филиала. */
+    public static function branchTopGoods(int $branchId, string $from, string $to, int $limit = 8): array
+    {
+        try {
+            return Db::all(
+                'SELECT COALESCE(p.name, \'Товар\') AS name, SUM(s.qty) AS qty, SUM(s."amountX100") AS amount
+                 FROM bar_sales s LEFT JOIN langame_products p ON p."branchId" = s."branchId" AND p."extId" = s."goodsId"
+                 WHERE s."branchId" = ? AND s."isCancelled" = 0 AND s."saleAt" >= ? AND s."saleAt" <= ?
+                 GROUP BY p.name ORDER BY amount DESC LIMIT ' . max(1, min(30, $limit)),
+                [$branchId, $from, $to . ' 23:59:59'],
+            );
+        } catch (PDOException) {
+            return [];
+        }
+    }
+
+    /** Выручка бара по часам суток за период. @return array<int, int> час => копейки */
+    public static function hourlyRevenue(int $branchId, string $from, string $to): array
+    {
+        $out = array_fill(0, 24, 0);
+        try {
+            $rows = Db::all(
+                'SELECT SUBSTR(s."saleAt", 12, 2) AS hh, SUM(s."amountX100") AS amount FROM bar_sales s
+                 WHERE s."branchId" = ? AND s."isCancelled" = 0 AND s."saleAt" >= ? AND s."saleAt" <= ?
+                 GROUP BY SUBSTR(s."saleAt", 12, 2)',
+                [$branchId, $from, $to . ' 23:59:59'],
+            );
+        } catch (PDOException) {
+            return $out;
+        }
+        foreach ($rows as $r) {
+            $h = (int) $r['hh'];
+            if ($h >= 0 && $h < 24) {
+                $out[$h] += (int) $r['amount'];
+            }
+        }
+        return $out;
+    }
+
+    /** Открытая сейчас смена Langame: кто на кассе и с какого времени. */
+    public static function openShift(int $branchId): ?array
+    {
+        try {
+            $row = Db::one(
+                'SELECT w."dateStart", w."langameUserId", l."employeeId" AS eid, l."langameName" AS "staffName"
+                 FROM langame_shifts w
+                 LEFT JOIN langame_staff l ON l."branchId" = w."branchId" AND l."langameUserId" = w."langameUserId"
+                 WHERE w."branchId" = ? AND w."dateStop" IS NULL AND w."dateStart" >= ?
+                 ORDER BY w."dateStart" DESC LIMIT 1',
+                [$branchId, now_tyumen()->modify('-2 days')->format('Y-m-d')],
+            );
+        } catch (PDOException) {
+            return null;
+        }
+        return $row ?: null;
+    }
+
+    /** Дата последней смены каждой учётки Langame. @return array<int, string> langameUserId => dateStart */
+    public static function lastShiftByStaff(int $branchId): array
+    {
+        try {
+            $rows = Db::all('SELECT "langameUserId" AS uid, MAX("dateStart") AS last FROM langame_shifts WHERE "branchId" = ? GROUP BY "langameUserId"', [$branchId]);
+        } catch (PDOException) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int) $r['uid']] = (string) $r['last'];
+        }
+        return $out;
+    }
+
+    /** Служебные и удалённые учётки вида langame17 — их не показываем в основном списке. */
+    public static function isPlaceholder(array $staff): bool
+    {
+        $name = trim((string) ($staff['langameName'] ?? ''));
+        $login = trim((string) ($staff['langameLogin'] ?? ''));
+        return $name === '' || (bool) preg_match('/^langame\d*$/i', $name) || (bool) preg_match('/^langame\d+$/i', $login);
+    }
+
+    private static function parseTs(?string $v): ?int
+    {
+        if ($v === null || trim($v) === '' || str_starts_with($v, '0000')) {
+            return null;
+        }
+        try {
+            return (new DateTimeImmutable($v, new DateTimeZone(APP_TZ)))->getTimestamp();
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    /**
+     * Живое состояние клуба из Langame: занятые ПК, загрузка по часам за сегодня, заканчивающиеся товары.
+     * Кэшируется на 2 минуты, чтобы не дёргать API на каждый просмотр.
+     * @return array{at: int, active: ?int, sessionsToday: ?int, hourly: int[], lowStock: array, errors: string[]}|null
+     */
+    public static function live(int $branchId): ?array
+    {
+        $s = self::settings($branchId);
+        if (!$s || !boolish($s['isEnabled']) || empty($s['tokenEnc'])) {
+            return null;
+        }
+        $cached = isset($s['liveJson']) && $s['liveJson'] ? json_decode((string) $s['liveJson'], true) : null;
+        if (is_array($cached) && time() - (int) ($s['liveAt'] ?? 0) < 120) {
+            return $cached;
+        }
+        $now = now_tyumen();
+        $nowTs = $now->getTimestamp();
+        $today = $now->format('Y-m-d');
+        $dayStart = (new DateTimeImmutable($today . ' 00:00:00', new DateTimeZone(APP_TZ)))->getTimestamp();
+        $out = ['at' => $nowTs, 'active' => null, 'sessionsToday' => null, 'hourly' => array_fill(0, 24, 0), 'lowStock' => [], 'errors' => []];
+
+        try {
+            $activePcs = [];
+            $hourPcs = array_fill(0, 24, []);
+            $todayCount = 0;
+            $from = $now->modify('-1 day')->format('Y-m-d');
+            for ($p = 1, $total = 1; $p <= $total && $p <= 6; $p++) {
+                [$rows, $total] = self::page($s, '/guests/sessions', ['date_from' => $from, 'date_to' => $today, 'page' => $p, 'page_limit' => 500]);
+                foreach ($rows as $r) {
+                    $start = self::parseTs(isset($r['date_start']) ? (string) $r['date_start'] : null);
+                    if ($start === null) {
+                        continue;
+                    }
+                    $stop = self::parseTs(isset($r['date_stop']) ? (string) $r['date_stop'] : null);
+                    $pc = (string) ($r['UUID'] ?? ($r['id'] ?? ''));
+                    $packet = (int) ($r['packet'] ?? 0);
+                    if ($packet === -1) {
+                        continue;
+                    }
+                    if ($start <= $nowTs && ($stop === null || $stop > $nowTs)) {
+                        $activePcs[$pc] = true;
+                    }
+                    if ($start >= $dayStart) {
+                        $todayCount++;
+                    }
+                    $end = min($stop ?? $nowTs, $nowTs);
+                    for ($h = 0; $h < 24; $h++) {
+                        $hs = $dayStart + $h * 3600;
+                        if ($hs > $nowTs) {
+                            break;
+                        }
+                        if ($start < $hs + 3600 && $end > $hs) {
+                            $hourPcs[$h][$pc] = true;
+                        }
+                    }
+                }
+            }
+            $out['active'] = count($activePcs);
+            $out['sessionsToday'] = $todayCount;
+            $out['hourly'] = array_map('count', $hourPcs);
+        } catch (Throwable $e) {
+            $out['errors'][] = 'Сессии: ' . ($e instanceof LangameError ? $e->getMessage() : 'нет данных');
+        }
+
+        try {
+            $clubs = self::page($s, '/clubs/list', [])[0];
+            $clubId = 0;
+            foreach ($clubs as $c) {
+                if ((int) ($c['active'] ?? 1) === 1 && (int) ($c['id'] ?? 0) > 0) {
+                    $clubId = (int) $c['id'];
+                    break;
+                }
+            }
+            if ($clubId > 0) {
+                $sold = [];
+                foreach (Db::all('SELECT "goodsId", SUM(qty) AS q FROM bar_sales WHERE "branchId" = ? AND "isCancelled" = 0 AND "saleAt" >= ? GROUP BY "goodsId"', [$branchId, $now->modify('-30 days')->format('Y-m-d')]) as $r) {
+                    $sold[(int) $r['goodsId']] = (int) $r['q'];
+                }
+                $goods = self::page($s, '/goods/list', ['club_id' => $clubId])[0];
+                $low = [];
+                foreach ($goods as $g) {
+                    $gid = (int) ($g['id'] ?? 0);
+                    $cnt = (int) ($g['count'] ?? 0);
+                    $perWeek = isset($sold[$gid]) ? $sold[$gid] / 30 * 7 : 0;
+                    if ($perWeek >= 1 && $cnt <= max(3, (int) ceil($perWeek / 2))) {
+                        $low[] = ['name' => mb_substr((string) ($g['name'] ?? 'Товар'), 0, 80), 'count' => $cnt, 'perWeek' => (int) round($perWeek)];
+                    }
+                }
+                usort($low, static fn ($a, $b) => $a['count'] <=> $b['count'] ?: $b['perWeek'] <=> $a['perWeek']);
+                $out['lowStock'] = array_slice($low, 0, 8);
+            }
+        } catch (Throwable $e) {
+            $out['errors'][] = 'Склад: ' . ($e instanceof LangameError ? $e->getMessage() : 'нет данных');
+        }
+
+        try {
+            Db::exec('UPDATE langame_settings SET "liveJson" = ?, "liveAt" = ? WHERE id = ?', [json_encode($out, JSON_UNESCAPED_UNICODE), $nowTs, $s['id']]);
+        } catch (PDOException) {
+        }
+        return $out;
     }
 
     /** Сумма продаж, которые не удалось привязать к сотруднику портала (копейки). */

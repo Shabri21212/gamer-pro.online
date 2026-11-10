@@ -689,3 +689,23 @@
     });
   })();
 })();
+
+/* Поиск по учёткам Langame: фильтрует строки и раскрывает блок неактивных при совпадении. */
+(function () {
+  document.querySelectorAll("[data-filter-input]").forEach(function (input) {
+    var root = document.getElementById(input.getAttribute("data-filter-input"));
+    if (!root) return;
+    var rows = root.querySelectorAll("[data-filter-text]");
+    var details = root.querySelector("[data-filter-details]");
+    input.addEventListener("input", function () {
+      var q = input.value.trim().toLowerCase();
+      var hiddenHit = false;
+      rows.forEach(function (li) {
+        var hit = !q || li.getAttribute("data-filter-text").indexOf(q) !== -1;
+        li.hidden = !hit;
+        if (hit && q && details && details.contains(li)) hiddenHit = true;
+      });
+      if (details && q) details.open = hiddenHit || details.open;
+    });
+  });
+})();

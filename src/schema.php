@@ -15,7 +15,7 @@ declare(strict_types=1);
  * Индексы: имя => 'колонка,колонка'; «!» в начале — уникальный.
  * Все строковые колонки в MySQL — utf8mb4_bin: сравнение и сортировка как в SQLite.
  */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 const SCHEMA = [
     'app_meta' => [
@@ -230,7 +230,7 @@ const SCHEMA = [
         'columns' => [
             'id' => 'pk', 'branchId' => 'int', 'baseUrl' => 'str:255', 'tokenEnc' => 'text', 'tokenHint' => 'str:16',
             'barPercentX10' => 'int=0', 'isEnabled' => 'bool=0', 'lastSyncAt' => 'ts', 'lastSyncOk' => 'bool=0',
-            'lastError' => 'text', 'syncedFrom' => 'date', 'updatedAt' => 'ts',
+            'lastError' => 'text', 'syncedFrom' => 'date', 'updatedAt' => 'ts', 'liveJson' => 'text', 'liveAt' => 'bigint',
         ],
         'indexes' => ['branch' => '!branchId'],
     ],
@@ -238,6 +238,7 @@ const SCHEMA = [
         'columns' => [
             'id' => 'pk', 'branchId' => 'int', 'langameUserId' => 'int', 'langameName' => 'str:191', 'langameLogin' => 'str:191',
             'employeeId' => 'int', 'percentX10' => 'int', 'updatedAt' => 'ts',
+            'isActive' => 'bool=1', 'adminStatus' => 'str:64', 'lastLoginAt' => 'bigint',
         ],
         'indexes' => ['branch_user' => '!branchId,langameUserId', 'employee' => 'employeeId'],
     ],
