@@ -70,7 +70,7 @@ const NAV_GROUPS = [
         ['href' => '/', 'label' => 'Мой день', 'icon' => 'home'],
         ['href' => '/shift', 'label' => 'Приём и сдача', 'icon' => 'clipboard-check'],
         ['href' => '/schedule', 'label' => 'График смен', 'icon' => 'calendar'],
-        ['href' => '/bar', 'label' => 'Продажи бара', 'icon' => 'coins'],
+        ['href' => '/bar', 'label' => 'Продажи и аналитика', 'icon' => 'coins'],
         ['href' => '/cleaning', 'label' => 'Чистка клавиатур', 'icon' => 'keyboard'],
         ['href' => '/manage/tasks', 'label' => 'Задания на смены', 'icon' => 'clipboard-list', 'perm' => 'tasks.assign'],
     ]],

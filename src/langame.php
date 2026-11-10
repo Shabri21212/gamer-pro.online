@@ -408,7 +408,7 @@ final class Langame
     }
 
     /** Последние продажи сотрудника. */
-    public static function recentSales(int $employeeId, string $from, string $to, int $limit = 20): array
+    public static function recentSales(int $employeeId, string $from, string $to, int $limit = 20, ?int $branchId = null): array
     {
         try {
             return Db::all(
@@ -417,9 +417,9 @@ final class Langame
                  JOIN langame_shifts w ON w."branchId" = s."branchId" AND w."extId" = s."shiftExtId"
                  JOIN langame_staff l ON l."branchId" = s."branchId" AND l."langameUserId" = w."langameUserId"
                  LEFT JOIN langame_products p ON p."branchId" = s."branchId" AND p."extId" = s."goodsId"
-                 WHERE l."employeeId" = ? AND s."saleAt" >= ? AND s."saleAt" <= ?
+                 WHERE l."employeeId" = ? AND s."saleAt" >= ? AND s."saleAt" <= ?' . ($branchId !== null ? ' AND s."branchId" = ?' : '') . '
                  ORDER BY s."saleAt" DESC, s.id DESC LIMIT ' . max(1, min(100, $limit)),
-                [$employeeId, $from, $to . ' 23:59:59'],
+                array_merge([$employeeId, $from, $to . ' 23:59:59'], $branchId !== null ? [$branchId] : []),
             );
         } catch (PDOException) {
             return [];
@@ -427,7 +427,7 @@ final class Langame
     }
 
     /** Топ позиций сотрудника за период. */
-    public static function topGoods(int $employeeId, string $from, string $to, int $limit = 5): array
+    public static function topGoods(int $employeeId, string $from, string $to, int $limit = 5, ?int $branchId = null): array
     {
         try {
             return Db::all(
@@ -436,9 +436,9 @@ final class Langame
                  JOIN langame_shifts w ON w."branchId" = s."branchId" AND w."extId" = s."shiftExtId"
                  JOIN langame_staff l ON l."branchId" = s."branchId" AND l."langameUserId" = w."langameUserId"
                  LEFT JOIN langame_products p ON p."branchId" = s."branchId" AND p."extId" = s."goodsId"
-                 WHERE l."employeeId" = ? AND s."isCancelled" = 0 AND s."saleAt" >= ? AND s."saleAt" <= ?
+                 WHERE l."employeeId" = ? AND s."isCancelled" = 0 AND s."saleAt" >= ? AND s."saleAt" <= ?' . ($branchId !== null ? ' AND s."branchId" = ?' : '') . '
                  GROUP BY p.name ORDER BY amount DESC LIMIT ' . max(1, min(20, $limit)),
-                [$employeeId, $from, $to . ' 23:59:59'],
+                array_merge([$employeeId, $from, $to . ' 23:59:59'], $branchId !== null ? [$branchId] : []),
             );
         } catch (PDOException) {
             return [];
@@ -534,6 +534,33 @@ final class Langame
         }
     }
 
+    public static function salesLedger(int $branchId, string $from, string $to, string $status, string $search, int $page): array
+    {
+        $join = ' FROM bar_sales s
+            LEFT JOIN langame_shifts w ON w."branchId" = s."branchId" AND w."extId" = s."shiftExtId"
+            LEFT JOIN langame_staff l ON l."branchId" = s."branchId" AND l."langameUserId" = w."langameUserId"
+            LEFT JOIN employees e ON e.id = l."employeeId"
+            LEFT JOIN langame_products p ON p."branchId" = s."branchId" AND p."extId" = s."goodsId"';
+        $where = ' WHERE s."branchId" = ? AND s."saleAt" >= ? AND s."saleAt" <= ?';
+        $params = [$branchId, $from, $to . ' 23:59:59'];
+        if (in_array($status, ['completed', 'cancelled'], true)) {
+            $where .= ' AND s."isCancelled" = ?';
+            $params[] = $status === 'cancelled' ? 1 : 0;
+        }
+        if ($search !== '') {
+            if (Db::driver() === 'sqlite') {
+                Db::pdo()->sqliteCreateFunction('LOWER', static fn ($value) => mb_strtolower((string) $value, 'UTF-8'), 1, PDO::SQLITE_DETERMINISTIC);
+            }
+            $where .= " AND (LOWER(COALESCE(p.name, '')) LIKE ? ESCAPE '!' OR LOWER(COALESCE(e.name, '')) LIKE ? ESCAPE '!' OR LOWER(COALESCE(l.\"langameName\", '')) LIKE ? ESCAPE '!')";
+            $needle = '%' . strtr(mb_strtolower($search), ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
+            array_push($params, $needle, $needle, $needle);
+        }
+        $total = (int) Db::value('SELECT COUNT(*)' . $join . $where, $params);
+        $page = max(1, min($page, max(1, (int) ceil($total / 25))));
+        $rows = Db::all('SELECT s."saleAt", s.qty, s."amountX100", s."isCashless", s."isCancelled", p.name AS "goodsName", e.name AS "employeeName", l."langameName" AS "staffName"' . $join . $where . ' ORDER BY s."saleAt" DESC, s.id DESC LIMIT 25 OFFSET ' . (($page - 1) * 25), $params);
+        return ['rows' => $rows, 'total' => $total, 'page' => $page];
+    }
+
     /** Топ позиций всего филиала. */
     public static function branchTopGoods(int $branchId, string $from, string $to, int $limit = 8): array
     {
@@ -542,7 +569,7 @@ final class Langame
                 'SELECT COALESCE(p.name, \'Товар\') AS name, SUM(s.qty) AS qty, SUM(s."amountX100") AS amount
                  FROM bar_sales s LEFT JOIN langame_products p ON p."branchId" = s."branchId" AND p."extId" = s."goodsId"
                  WHERE s."branchId" = ? AND s."isCancelled" = 0 AND s."saleAt" >= ? AND s."saleAt" <= ?
-                 GROUP BY p.name ORDER BY amount DESC LIMIT ' . max(1, min(30, $limit)),
+                 GROUP BY s."goodsId", p.name ORDER BY amount DESC LIMIT ' . max(1, min(30, $limit)),
                 [$branchId, $from, $to . ' 23:59:59'],
             );
         } catch (PDOException) {
@@ -693,6 +720,7 @@ final class Langame
                     }
                 }
             }
+            $out['sessionsPartial'] = $total > 6;
             $out['active'] = count($activePcs);
             $out['sessionsToday'] = $todayCount;
             $out['hourly'] = array_map('count', $hourPcs);
@@ -730,6 +758,7 @@ final class Langame
                 }
                 usort($low, static fn ($a, $b) => $a['count'] <=> $b['count'] ?: $b['perWeek'] <=> $a['perWeek']);
                 $out['lowStock'] = array_slice($low, 0, 8);
+                $out['stockAvailable'] = true;
             }
         } catch (Throwable $e) {
             $out['errors'][] = 'Склад: ' . ($e instanceof LangameError ? $e->getMessage() : 'нет данных');
