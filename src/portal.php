@@ -252,6 +252,9 @@ final class Portal
 
     private static function displayName(array $user): string
     {
+        if (($user['role'] ?? '') === 'owner') {
+            return 'Руководство';
+        }
         return (string) ($user['employeeName'] ?? $user['name']);
     }
 
@@ -692,7 +695,7 @@ final class Portal
         if ($drawer) {
             $html .= '<button type="button" class="ml-auto inline-flex size-9 items-center justify-center rounded-md text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" data-close-nav aria-label="Закрыть меню">' . icon('x', 'size-5') . '</button>';
         }
-        $html .= '</div><nav class="flex-1 overflow-y-auto px-3 pb-4 scrollbar-thin" aria-label="Разделы портала">';
+        $html .= '</div><nav class="flex-1 overflow-y-auto px-3 pb-4 scrollbar-thin" aria-label="Разде��ы портала">';
         $activeItem = find_nav_item($path);
         foreach (NAV_GROUPS as $group) {
             $items = array_filter($group['items'], static fn ($it) => empty($it['perm']) || can($user, $it['perm']));
@@ -724,7 +727,7 @@ final class Portal
         $sub = $user['roleLabel'] . ($user['homeBranchId'] ? ' · ' . self::branchName($user['homeBranchId']) : '');
         $html .= '<div class="border-t border-sidebar-border p-3"><div class="flex items-center gap-2.5">';
         $html .= '<a href="' . h(url_to('/account')) . '" class="flex min-w-0 flex-1 items-center gap-3 rounded-md p-1.5 transition-colors hover:bg-sidebar-accent">';
-        $html .= '<span class="cut inline-flex size-9 shrink-0 items-center justify-center bg-sidebar-accent-foreground font-display text-xs font-semibold text-sidebar" style="--cut:7px" aria-hidden="true">' . h(initials($name)) . '</span>';
+        $html .= avatar($name, 'size-9', 'bg-sidebar-accent text-sidebar-muted');
         $html .= '<span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold text-sidebar-accent-foreground">' . h(short_name($name)) . '</span><span class="truncate text-xs text-sidebar-muted">' . h($sub) . '</span></span></a>';
         $html .= '<button type="button" class="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" data-theme-toggle aria-label="Сменить тему">' . icon('moon', 'size-4') . '</button>';
         $html .= form_open('logout', 'action="' . h(url_to('/sign-out')) . '" class="shrink-0"') . '<button class="inline-flex size-9 items-center justify-center rounded-md text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-brand" aria-label="Выйти" title="Выйти">' . icon('logout', 'size-4') . '</button></form>';

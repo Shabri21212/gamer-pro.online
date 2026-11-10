@@ -645,12 +645,16 @@ final class Langame
         $nowTs = $now->getTimestamp();
         $today = $now->format('Y-m-d');
         $dayStart = (new DateTimeImmutable($today . ' 00:00:00', new DateTimeZone(APP_TZ)))->getTimestamp();
-        $out = ['at' => $nowTs, 'active' => null, 'sessionsToday' => null, 'hourly' => array_fill(0, 24, 0), 'lowStock' => [], 'errors' => []];
+        $out = ['at' => $nowTs, 'active' => null, 'sessionsToday' => null, 'guestsToday' => null, 'avgMinutes' => null, 'bookedToday' => 0, 'pcsSeen' => 0, 'hourly' => array_fill(0, 24, 0), 'lowStock' => [], 'errors' => []];
 
         try {
             $activePcs = [];
             $hourPcs = array_fill(0, 24, []);
             $todayCount = 0;
+            $guests = [];
+            $minutes = [];
+            $booked = 0;
+            $seenPcs = [];
             $from = $now->modify('-1 day')->format('Y-m-d');
             for ($p = 1, $total = 1; $p <= $total && $p <= 6; $p++) {
                 [$rows, $total] = self::page($s, '/guests/sessions', ['date_from' => $from, 'date_to' => $today, 'page' => $p, 'page_limit' => 500]);
@@ -670,7 +674,13 @@ final class Langame
                     }
                     if ($start >= $dayStart) {
                         $todayCount++;
+                        $guests[(string) ($r['guest_id'] ?? 'pc' . $pc)] = true;
+                        $minutes[] = max(0, (int) round((min($stop ?? $nowTs, $nowTs) - $start) / 60));
+                        if ((int) ($r['create_by_rezerv'] ?? 0) === 1) {
+                            $booked++;
+                        }
                     }
+                    $seenPcs[$pc] = true;
                     $end = min($stop ?? $nowTs, $nowTs);
                     for ($h = 0; $h < 24; $h++) {
                         $hs = $dayStart + $h * 3600;
@@ -686,6 +696,10 @@ final class Langame
             $out['active'] = count($activePcs);
             $out['sessionsToday'] = $todayCount;
             $out['hourly'] = array_map('count', $hourPcs);
+            $out['guestsToday'] = count($guests);
+            $out['avgMinutes'] = $minutes ? (int) round(array_sum($minutes) / count($minutes)) : null;
+            $out['bookedToday'] = $booked;
+            $out['pcsSeen'] = count($seenPcs);
         } catch (Throwable $e) {
             $out['errors'][] = 'Сессии: ' . ($e instanceof LangameError ? $e->getMessage() : 'нет данных');
         }

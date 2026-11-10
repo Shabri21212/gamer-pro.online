@@ -19,6 +19,7 @@ require $src . '/helpers.php';
 require $src . '/access.php';
 require $src . '/ui.php';
 require $src . '/langame.php';
+require $src . '/xlsx.php';
 require $src . '/portal.php';
 
 /** Настройки из config.php в корне сайта (на хостинге). Нет файла — пустой массив. */

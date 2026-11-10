@@ -160,7 +160,7 @@ function confirm_attr(string $message): string
     return 'data-confirm="' . h($message) . '"';
 }
 
-/** Подпись + поле внутри ����дного <label>, чтобы клик по подписи фокусировал поле. */
+/** Подпись + поле внутри ������дного <label>, чтобы клик по подписи фокусировал поле. */
 function ui_field(string $label, string $control, string $hint = '', string $class = ''): string
 {
     $html = '<label class="flex min-w-0 flex-col gap-1.5 ' . h($class) . '"><span class="text-sm font-medium text-foreground">' . h($label) . '</span>' . $control;
@@ -397,9 +397,13 @@ function stat_tile(string $label, string $value, string $hint = '', string $href
     return $html . '</' . $tag . '>';
 }
 
-function avatar(string $name, string $class = 'size-9 text-xs'): string
+function avatar(string $name, string $class = 'size-9 text-xs', string $tone = 'bg-muted text-muted-foreground'): string
 {
-    return '<span class="cut inline-flex shrink-0 items-center justify-center bg-foreground font-display font-semibold text-background ' . h($class) . '" style="--cut:7px" aria-hidden="true">' . h(initials($name)) . '</span>';
+    $glyph = '<svg viewBox="0 0 32 32" class="size-full" aria-hidden="true" focusable="false">'
+        . '<circle cx="16" cy="12.5" r="5.75" fill="currentColor" opacity=".9"/>'
+        . '<path d="M4.5 32c0-6.6 5.15-11.25 11.5-11.25S27.5 25.4 27.5 32Z" fill="currentColor" opacity=".9"/>'
+        . '</svg>';
+    return '<span class="avatar cut inline-flex shrink-0 items-end justify-center overflow-hidden ring-1 ring-inset ring-border ' . h($tone) . ' ' . h($class) . '" style="--cut:7px" aria-hidden="true" title="' . h($name) . '">' . $glyph . '</span>';
 }
 
 function progress_bar(int $pct, string $label = '', string $class = ''): string

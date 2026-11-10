@@ -250,14 +250,47 @@ trait PagesBar
         $avgDay = $daysPassed > 0 ? (int) round($sum['revenue'] / $daysPassed) : 0;
         $avgLine = $sum['lines'] > 0 ? (int) round($sum['revenue'] / $sum['lines']) : 0;
 
-        $q = ['branch' => $branch['slug'], 'm' => $month['key']];
+        $base = ['branch' => $branch['slug'], 'm' => $month['key']];
+        $tab = self::getStr('tab', 12);
+        if (!in_array($tab, ['overview', 'team', 'sales', 'salary'], true)) {
+            $tab = self::getStr('emp', 10) !== '' ? 'team' : 'overview';
+        }
+        $q = $base + ['tab' => $tab];
         $empId = (int) self::getStr('emp', 10);
+
+        if ($tab === 'salary' && self::getStr('export', 6) === 'xlsx') {
+            self::barPayrollExport($month);
+        }
+
         $linkedMe = $user['employeeId'] !== null && (bool) Db::value('SELECT 1 FROM langame_staff WHERE "employeeId" = ?', [(int) $user['employeeId']]);
-        $actions = ($linkedMe ? self::barViewSwitch($branch, $month, 'team') : '') . self::barBranchTabs($branch, $month);
-        $html = page_head('Продажи бара', 'Кто сколько продаёт, где отмены и что сейчас происходит в клубе. Данные Langame обновляются каждые ' . (Langame::AUTO_SYNC_SECONDS / 60) . ' минуты.', $actions, $branch['name']);
+        $actions = ($linkedMe ? self::barViewSwitch($branch, $month, 'team') : '') . ($tab === 'salary' ? '' : self::barBranchTabs($branch, $month));
+        $intro = [
+            'overview' => 'Что сейчас происходит в клубе и на что обратить внимание.',
+            'team' => 'Продажи каждого администратора. Нажмите на человека, чтобы открыть его чеки.',
+            'sales' => 'Крупные продажи, отмены и хиты бара за месяц.',
+            'salary' => 'Зарплата каждого за месяц: смены по ставке, процент с бара и штрафы. Можно скачать в Excel.',
+        ][$tab];
+        $html = page_head('Продажи бара', $intro . ' Данные Langame обновляются каждые ' . (Langame::AUTO_SYNC_SECONDS / 60) . ' минуты.', $actions, $tab === 'salary' ? 'Все филиалы' : $branch['name']);
+
+        $nav = '<div class="flex shrink-0 items-center gap-1"><a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/bar', ['m' => $month['prev']] + $q)) . '" aria-label="Предыдущий месяц">' . icon('chevronleft') . '</a>';
+        $nav .= '<span class="min-w-32 text-center font-display text-sm font-semibold">' . h($month['title']) . '</span>';
+        $nav .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/bar', ['m' => $month['next']] + $q)) . '" aria-label="Следующий месяц">' . icon('chevronright') . '</a></div>';
+        $tabs = [
+            'overview' => ['label' => 'Обзор', 'href' => url_to('/bar', $base + ['tab' => 'overview'])],
+            'team' => ['label' => 'Сотрудники', 'href' => url_to('/bar', $base + ['tab' => 'team'])],
+            'sales' => ['label' => 'Продажи', 'href' => url_to('/bar', $base + ['tab' => 'sales'])],
+            'salary' => ['label' => 'Зарплата', 'href' => url_to('/bar', $base + ['tab' => 'salary'])],
+        ];
+        $html .= '<div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-end sm:justify-between"><div class="min-w-0 flex-1">' . tabs_nav($tabs, $tab, 'Разделы') . '</div>' . $nav . '</div>';
+
+        if ($tab === 'salary') {
+            $html .= self::barPayroll($user, $month, $q);
+            self::layout($user, '<div class="flex flex-col gap-6">' . $html . '</div>', ['title' => 'Зарплата', 'width' => 'wide']);
+            return;
+        }
 
         /* --- клуб сейчас --- */
-        if ($month['isCurrent']) {
+        if ($tab === 'overview' && $month['isCurrent']) {
             $pcTotal = (int) ($branch['pcCount'] ?? 0);
             $active = $live['active'] ?? null;
             $hero = '<section class="relative isolate overflow-hidden hero-panel rounded-xl text-sidebar-foreground shadow-sm" aria-labelledby="club-now">';
@@ -285,26 +318,24 @@ trait PagesBar
         $ok = boolish($s['lastSyncOk'] ?? 0);
         $sync = '<div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm shadow-xs">';
         $sync .= '<span class="flex items-center gap-2 text-muted-foreground"><span class="size-2 rounded-full ' . ($ok ? 'bg-foreground/60' : 'bg-primary') . '" aria-hidden="true"></span>';
-        $sync .= $ok ? 'Обновлено ' . h(format_dt((string) ($s['lastSyncAt'] ?? ''))) : 'Последнее обновление не прошло' . (!empty($s['lastError']) ? ': ' . h((string) $s['lastError']) : '');
+        $sync .= $ok ? 'Обновл��но ' . h(format_dt((string) ($s['lastSyncAt'] ?? ''))) : 'Последнее обновление не прошло' . (!empty($s['lastError']) ? ': ' . h((string) $s['lastError']) : '');
         $sync .= '</span><div class="flex flex-wrap items-center gap-2">';
         if ($user['isOwner']) {
             $sync .= '<a class="' . btn_class('quiet', 'sm') . '" href="' . h(url_to('/manage/langame')) . '">' . icon('link', 'size-4') . 'Привязки</a>';
         }
         $sync .= form_open('sync_langame') . hidden('branchId', $bid) . hidden('back', '/bar?branch=' . $branch['slug']) . '<button class="' . btn_class('outline', 'sm') . '">' . icon('refresh', 'size-4') . 'Обновить</button></form></div></div>';
-        $html .= $sync;
 
         /* --- итоги месяца --- */
-        $nav = '<div class="flex items-center gap-1"><a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/bar', ['m' => $month['prev']] + $q)) . '" aria-label="Предыдущий месяц">' . icon('chevronleft') . '</a>';
-        $nav .= '<span class="min-w-32 text-center font-display text-sm font-semibold">' . h($month['title']) . '</span>';
-        $nav .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/bar', ['m' => $month['next']] + $q)) . '" aria-label="Следующий месяц">' . icon('chevronright') . '</a></div>';
-        $html .= '<section class="flex flex-col gap-4">' . section_title('Итоги месяца', $nav);
-        $html .= '<div class="grid grid-cols-2 gap-3 lg:grid-cols-5">';
-        $html .= stat_tile('Выручка бара', h(kop_rub($sum['revenue'])), 'в среднем ' . h(kop_rub($avgDay)) . ' в день', '', 'coins');
-        $html .= stat_tile('Позиций', h(num_fmt($sum['qty'])), 'средняя ' . h(kop_rub($avgLine)), '', 'list');
-        $html .= stat_tile('Безнал', h($sum['revenue'] > 0 ? (string) round($sum['cashless'] / $sum['revenue'] * 100) . '%' : '—'), h(kop_rub($sum['cashless'])), '', 'wallet');
-        $html .= stat_tile('Отменено', h(kop_rub($sum['cancelAmount'])), h(plural($sum['cancelCount'], 'чек', 'чека', 'чеков')), '', 'alert', $sum['cancelCount'] > 0);
-        $html .= stat_tile('К выплате %', h(kop_rub($sum['earn'])), 'процент администраторам', can($user, 'staff.manage') ? url_to('/manage/grades') : '', 'percent');
-        $html .= '</div></section>';
+        $kpi = '<div class="grid grid-cols-2 gap-3 lg:grid-cols-5">';
+        $kpi .= stat_tile('Выручка бара', h(kop_rub($sum['revenue'])), 'в среднем ' . h(kop_rub($avgDay)) . ' в день', '', 'coins');
+        $kpi .= stat_tile('Позиций', h(num_fmt($sum['qty'])), 'средняя ' . h(kop_rub($avgLine)), '', 'list');
+        $kpi .= stat_tile('Безнал', h($sum['revenue'] > 0 ? (string) round($sum['cashless'] / $sum['revenue'] * 100) . '%' : '—'), h(kop_rub($sum['cashless'])), '', 'wallet');
+        $kpi .= stat_tile('Отменено', h(kop_rub($sum['cancelAmount'])), h(plural($sum['cancelCount'], 'чек', 'чека', 'чеков')), url_to('/bar', $base + ['tab' => 'sales']), 'alert', $sum['cancelCount'] > 0);
+        $kpi .= stat_tile('К выплате %', h(kop_rub($sum['earn'])), 'процент администраторам', url_to('/bar', $base + ['tab' => 'salary']), 'percent');
+        $kpi .= '</div>';
+        if ($tab === 'overview') {
+            $html .= $sync . $kpi;
+        }
 
         /* --- таблица сотрудников --- */
         $rows = $stats;
@@ -358,7 +389,7 @@ trait PagesBar
                 }
                 $detail .= '</ul>';
             } else {
-                $detail .= '<p class="mt-2 text-sm text-muted-foreground">Продаж нет.</p>';
+                $detail .= '<p class="mt-2 text-sm text-muted-foreground">Пр��даж нет.</p>';
             }
             $detail .= '</div><div><h3 class="text-sm font-semibold">Что продаёт чаще</h3>';
             if ($top) {
@@ -451,12 +482,135 @@ trait PagesBar
             $hoursHtml = card(card_head('Когда покупают', 'Пик — с ' . sprintf('%02d:00 до %02d:00', $peak, ($peak + 1) % 24) . ', выручка бара по часам за месяц', '', 'clock') . '<div class="mt-4">' . self::hourBars($hours, 'Выручка бара по часам за месяц', static fn ($v) => kop_rub($v)) . '</div>', 'p-5');
         }
 
-        $html .= $detail;
-        $html .= '<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]"><div class="flex min-w-0 flex-col gap-6">' . card($team, 'p-5') . $hoursHtml . '</div>';
-        $html .= '<div class="flex min-w-0 flex-col gap-6">' . card($watch, 'p-5') . card($topHtml, 'p-5') . '</div></div>';
-        $html .= '<div class="grid items-start gap-6 md:grid-cols-2">' . card($bigHtml, 'p-5') . card($cancelHtml, 'p-5') . '</div>';
+        if ($tab === 'overview') {
+            $html .= '<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]"><div class="flex min-w-0 flex-col gap-6">' . ($hoursHtml !== '' ? $hoursHtml : card(card_head('Когда покупают', 'Пока нет продаж за месяц', '', 'clock'), 'p-5')) . '</div>';
+            $html .= '<div class="flex min-w-0 flex-col gap-6">' . card($watch, 'p-5') . '</div></div>';
+        } elseif ($tab === 'team') {
+            $html .= $detail . card($team, 'p-5');
+        } else {
+            $html .= '<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]"><div class="flex min-w-0 flex-col gap-6">' . card($bigHtml, 'p-5') . card($cancelHtml, 'p-5') . '</div>';
+            $html .= '<div class="flex min-w-0 flex-col gap-6">' . card($topHtml, 'p-5') . '</div></div>';
+        }
 
         self::layout($user, '<div class="flex flex-col gap-6">' . $html . '</div>', ['title' => 'Продажи бара', 'width' => 'wide']);
+    }
+
+    /* ---------- Зарплата за месяц ---------- */
+
+    /** Строки ведомости: смены по типам, ставка, процент с бара, штрафы. Суммы в рублях. */
+    private static function barPayrollRows(array $month): array
+    {
+        $gradeById = [];
+        foreach (self::gradeRows() as $g) {
+            $gradeById[$g['id']] = $g;
+        }
+        $byType = [];
+        foreach (Db::all('SELECT "employeeId", "shiftType", COUNT(*) AS n FROM shifts WHERE date >= ? AND date < ? GROUP BY "employeeId", "shiftType"', [$month['from'], add_days($month['to'], 1)]) as $r) {
+            $byType[(int) $r['employeeId']][(string) $r['shiftType']] = (int) $r['n'];
+        }
+        $fines = self::finesTotals($month['from'], $month['to']);
+        $bar = Langame::totalsByEmployee($month['from'], $month['to']);
+
+        $rows = [];
+        foreach (self::employees() as $e) {
+            $id = (int) $e['id'];
+            $t = $byType[$id] ?? [];
+            $day = $t['day'] ?? 0;
+            $night = $t['night'] ?? 0;
+            $full = $t['full'] ?? 0;
+            $units = $day + $night + $full * 2;
+            $fine = $fines[$id] ?? 0;
+            $barRev = (int) round(($bar[$id]['revenue'] ?? 0) / 100);
+            $barEarn = (int) round(($bar[$id]['earn'] ?? 0) / 100);
+            if (!boolish($e['isActive']) && $units === 0 && $fine === 0 && $barRev === 0) {
+                continue;
+            }
+            $g = $e['gradeId'] !== null ? ($gradeById[(int) $e['gradeId']] ?? null) : null;
+            $rate = $g ? (int) $g['shiftRate'] : 0;
+            $gross = $units * $rate;
+            $rows[] = [
+                'id' => $id, 'name' => (string) $e['name'], 'active' => boolish($e['isActive']), 'grade' => $g['title'] ?? '',
+                'day' => $day, 'night' => $night, 'full' => $full, 'units' => $units, 'rate' => $rate, 'gross' => $gross,
+                'barRev' => $barRev, 'barPct' => (int) ($bar[$id]['percentX10'] ?? 0), 'bar' => $barEarn, 'fines' => $fine,
+                'total' => $gross + $barEarn - $fine,
+            ];
+        }
+        usort($rows, static fn ($a, $b) => [$b['active'], $b['total']] <=> [$a['active'], $a['total']]);
+        return $rows;
+    }
+
+    private static function barPayroll(array $user, array $month, array $q): string
+    {
+        $rows = self::barPayrollRows($month);
+        $sum = ['units' => 0, 'gross' => 0, 'bar' => 0, 'fines' => 0, 'total' => 0, 'barRev' => 0];
+        foreach ($rows as $r) {
+            foreach ($sum as $k => $_) {
+                $sum[$k] += $r[$k];
+            }
+        }
+        $period = format_day_month($month['from']) . ' — ' . format_day_month($month['to']);
+
+        $html = '<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">';
+        $html .= stat_tile('Фонд за месяц', h(money_rub($sum['total'])), $month['isCurrent'] ? 'месяц ещё идёт' : 'итог', '', 'wallet');
+        $html .= stat_tile('По ставкам', h(money_rub($sum['gross'])), h(plural($sum['units'], 'смена', 'смены', 'смен')) . ' · сутки за две', '', 'calendar');
+        $html .= stat_tile('% с бара', h(money_rub($sum['bar'])), 'с продаж на ' . h(money_rub($sum['barRev'])), '', 'coins');
+        $html .= stat_tile('Штрафы', h(money_rub($sum['fines'])), '', url_to('/fines'), 'scale', $sum['fines'] > 0);
+        $html .= '</div>';
+
+        $head = '<div class="flex flex-wrap items-center justify-between gap-3">' . card_head('Ведомость за ' . $month['name'], h($period) . ' · ' . h(plural(count($rows), 'сотрудник', 'сотрудника', 'сотрудников')), '', 'file-text');
+        $head .= '<div class="flex flex-wrap gap-2"><a class="' . btn_class('quiet', 'sm') . '" href="' . h(url_to('/manage/grades')) . '">' . icon('settings', 'size-4') . 'Ставки</a>';
+        $head .= '<a class="' . btn_class('default', 'sm') . '" href="' . h(url_to('/bar', $q + ['export' => 'xlsx'])) . '" download>' . icon('download', 'size-4') . 'Скачать Excel</a></div></div>';
+
+        if (!$rows) {
+            return $html . card($head . '<p class="mt-4 text-sm text-muted-foreground">За ' . h($month['name']) . ' нет ни смен, ни продаж.</p>', 'p-5');
+        }
+
+        $maxTotal = max(1, ...array_map(static fn ($r) => $r['total'], $rows));
+        $t = '<div class="-mx-5 mt-5 overflow-x-auto"><table class="w-full min-w-[56rem] text-sm"><thead><tr class="border-y border-border bg-muted/40 text-left text-xs font-semibold text-muted-foreground">';
+        foreach (['Сотрудник', 'День', 'Ночь', 'Сутки', 'Ставка', 'По ставке', 'Бар', '% с бара', 'Штрафы', 'К выплате'] as $i => $c) {
+            $t .= '<th scope="col" class="px-4 py-2.5 font-semibold whitespace-nowrap' . ($i > 0 ? ' text-right' : '') . '">' . $c . '</th>';
+        }
+        $t .= '</tr></thead><tbody class="divide-y divide-border">';
+        foreach ($rows as $r) {
+            $num = static fn (int $v): string => $v ? (string) $v : '<span class="text-muted-foreground/60">—</span>';
+            $t .= '<tr class="transition-colors hover:bg-muted/40' . ($r['active'] ? '' : ' opacity-60') . '">';
+            $t .= '<td class="px-4 py-3"><span class="flex items-center gap-3">' . avatar($r['name'], 'size-8 text-[11px]') . '<span class="flex min-w-0 flex-col gap-1"><span class="truncate font-medium">' . h(short_name($r['name'])) . '</span>';
+            $t .= '<span class="text-xs text-muted-foreground">' . h($r['grade'] !== '' ? $r['grade'] : 'без уровня') . ($r['active'] ? '' : ' · в архиве') . '</span></span></span></td>';
+            $t .= '<td class="px-4 py-3 text-right tabular-nums">' . $num($r['day']) . '</td>';
+            $t .= '<td class="px-4 py-3 text-right tabular-nums">' . $num($r['night']) . '</td>';
+            $t .= '<td class="px-4 py-3 text-right tabular-nums">' . $num($r['full']) . '</td>';
+            $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums text-muted-foreground">' . ($r['rate'] ? h(money_rub($r['rate'])) : '—') . '</td>';
+            $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($r['gross'])) . '</td>';
+            $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums text-muted-foreground">' . ($r['barRev'] ? h(money_rub($r['barRev'])) : '—') . '</td>';
+            $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . ($r['bar'] ? '+' . h(money_rub($r['bar'])) : '—') . '</td>';
+            $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums' . ($r['fines'] ? ' text-primary-ink' : '') . '">' . ($r['fines'] ? '−' . h(money_rub($r['fines'])) : '—') . '</td>';
+            $t .= '<td class="px-4 py-3 text-right"><span class="flex flex-col items-end gap-1.5"><span class="font-display font-semibold whitespace-nowrap tabular-nums">' . h(money_rub($r['total'])) . '</span>';
+            $t .= '<span class="block h-1 w-20 overflow-hidden rounded-full bg-muted"><span class="block h-full rounded-full bg-primary" style="width:' . max(3, (int) round(max(0, $r['total']) / $maxTotal * 100)) . '%"></span></span></span></td></tr>';
+        }
+        $t .= '</tbody><tfoot><tr class="border-t-2 border-border bg-muted/40 font-semibold">';
+        $t .= '<td class="px-4 py-3">Итого</td><td class="px-4 py-3 text-right tabular-nums" colspan="3">' . h(plural($sum['units'], 'смена', 'смены', 'смен')) . '</td><td></td>';
+        $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['gross'])) . '</td><td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['barRev'])) . '</td>';
+        $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['bar'])) . '</td><td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['fines'])) . '</td>';
+        $t .= '<td class="px-4 py-3 text-right font-display whitespace-nowrap tabular-nums">' . h(money_rub($sum['total'])) . '</td></tr></tfoot></table></div>';
+        $t .= '<p class="mt-4 text-xs leading-relaxed text-muted-foreground">Смены берутся из графика, сутки считаются за две. Процент с бара — по продажам в Langame, привязанным к сотруднику. Штрафы — выписанные за этот месяц.</p>';
+
+        return $html . card($head . $t, 'p-5');
+    }
+
+    private static function barPayrollExport(array $month): never
+    {
+        $rows = self::barPayrollRows($month);
+        $out = [['Сотрудник', 'Уровень', 'Статус', 'Смен день', 'Смен ночь', 'Смен сутки', 'Всего смен (сутки ×2)', 'Ставка, ₽', 'По ставке, ₽', 'Продажи бара, ₽', '% с бара', 'Процент с бара, ₽', 'Штрафы, ₽', 'К выплате, ₽']];
+        $sum = array_fill_keys(['day', 'night', 'full', 'units', 'gross', 'barRev', 'bar', 'fines', 'total'], 0);
+        foreach ($rows as $r) {
+            $out[] = [$r['name'], $r['grade'], $r['active'] ? 'работает' : 'в архиве', $r['day'], $r['night'], $r['full'], $r['units'], $r['rate'], $r['gross'], $r['barRev'], pct_label($r['barPct']), $r['bar'], $r['fines'], $r['total']];
+            foreach ($sum as $k => $_) {
+                $sum[$k] += $r[$k];
+            }
+        }
+        $out[] = ['Итого', '', '', $sum['day'], $sum['night'], $sum['full'], $sum['units'], null, $sum['gross'], $sum['barRev'], '', $sum['bar'], $sum['fines'], $sum['total']];
+        $name = 'Зарплата ' . $month['title'] . '.xlsx';
+        xlsx_send($name, 'Зарплата ' . $month['title'], $out, [30, 14, 11, 10, 10, 11, 14, 11, 13, 15, 9, 15, 11, 14]);
     }
 
     /* ---------- Подключение Langame (владелец) ---------- */

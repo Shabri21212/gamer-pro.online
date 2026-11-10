@@ -43,8 +43,9 @@ trait PagesShifts
         $dateLabel = mb_strtoupper(mb_substr($wd, 0, 1)) . mb_substr($wd, 1) . ', ' . format_day_month($today);
 
         $html = '<header class="flex flex-col gap-2">' . eyebrow($dateLabel);
-        $html .= '<h1 class="font-display text-2xl leading-tight font-semibold tracking-tight text-balance sm:text-[2rem]">' . h(self::greeting($now)) . ', ' . h(first_name($name)) . '</h1>';
+        $html .= '<h1 class="font-display text-2xl leading-tight font-semibold tracking-tight text-balance sm:text-[2rem]">' . h(self::greeting($now)) . (($user['role'] ?? '') === 'owner' ? '' : ', ' . h(first_name($name))) . '</h1>';
         $html .= '<p class="flex items-center gap-2 text-sm text-muted-foreground">' . icon('clock', 'size-4') . '<span>Сейчас <time data-clock class="font-semibold text-foreground tabular-nums">' . $now->format('H:i') . '</time> по времени клуба</span></p></header>';
+        $html .= self::clubLoadPanel();
 
         $html .= '<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">';
         $html .= '<div class="flex min-w-0 flex-col gap-6">';
@@ -249,6 +250,86 @@ trait PagesShifts
             $html .= '</div>';
         }
         return $html;
+    }
+
+    /** Посадка и загрузка залов по данным Langame — инфографика в шапке «Моего дня». */
+    private static function clubLoadPanel(): string
+    {
+        $enabled = Langame::enabledBranchIds();
+        if (!$enabled) {
+            return '';
+        }
+        $now = now_tyumen();
+        $hourNow = (int) $now->format('G');
+        $cards = '';
+        $totActive = 0;
+        $totPcs = 0;
+        $totSessions = 0;
+        foreach (self::branches() as $b) {
+            if (!in_array($b['id'], $enabled, true)) {
+                continue;
+            }
+            $live = Langame::live((int) $b['id']);
+            if (!$live) {
+                continue;
+            }
+            $active = $live['active'];
+            $pcs = (int) ($b['pcCount'] ?? 0) ?: (int) ($live['pcsSeen'] ?? 0);
+            $pct = $active !== null && $pcs > 0 ? min(100, (int) round($active / $pcs * 100)) : null;
+            $totActive += (int) $active;
+            $totPcs += $pcs;
+            $totSessions += (int) ($live['sessionsToday'] ?? 0);
+            $hourly = $live['hourly'] ?? array_fill(0, 24, 0);
+            $peakVal = max($hourly);
+            $peak = $peakVal > 0 ? (int) array_search($peakVal, $hourly, true) : null;
+            $level = $pct === null ? 'нет данных' : ($pct >= 80 ? 'почти полный' : ($pct >= 45 ? 'оживлённо' : ($pct > 0 ? 'спокойно' : 'пусто')));
+
+            $r = 34;
+            $len = 2 * M_PI * $r;
+            $dash = $pct !== null ? round($len * $pct / 100, 1) : 0;
+            $gauge = '<svg viewBox="0 0 80 80" class="size-24 shrink-0 -rotate-90" role="img" aria-label="' . h($b['name'] . ': занято ' . ($pct ?? 0) . '%') . '">'
+                . '<circle cx="40" cy="40" r="' . $r . '" fill="none" stroke="currentColor" stroke-width="7" class="text-sidebar-foreground/10"/>'
+                . '<circle cx="40" cy="40" r="' . $r . '" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" class="text-brand" stroke-dasharray="' . $dash . ' ' . round($len, 1) . '"/></svg>';
+
+            $c = '<article class="flex min-w-0 flex-col gap-4 rounded-lg border border-sidebar-foreground/10 bg-sidebar-foreground/[0.03] p-4">';
+            $c .= '<div class="flex items-center justify-between gap-2"><h3 class="font-display text-base font-semibold">' . h($b['name']) . '</h3><span class="text-xs text-sidebar-muted">' . h($level) . '</span></div>';
+            $c .= '<div class="flex items-center gap-4"><div class="relative">' . $gauge . '<span class="absolute inset-0 flex flex-col items-center justify-center"><span class="font-display text-xl leading-none font-semibold tabular-nums">' . ($pct !== null ? $pct . '%' : '—') . '</span><span class="mt-1 text-[10px] text-sidebar-muted tabular-nums">' . ($active !== null ? (int) $active . ($pcs ? ' / ' . $pcs : '') . ' ПК' : '') . '</span></span></div>';
+            $c .= '<dl class="grid min-w-0 flex-1 grid-cols-2 gap-x-3 gap-y-2 text-sm">';
+            foreach ([
+                ['Сессий', $live['sessionsToday'] !== null ? (string) (int) $live['sessionsToday'] : '—'],
+                ['Гостей', isset($live['guestsToday']) && $live['guestsToday'] !== null ? (string) (int) $live['guestsToday'] : '—'],
+                ['Средняя', isset($live['avgMinutes']) && $live['avgMinutes'] !== null ? self::minutesLabel((int) $live['avgMinutes']) : '—'],
+                ['По брони', (string) (int) ($live['bookedToday'] ?? 0)],
+            ] as [$k, $v]) {
+                $c .= '<div class="flex min-w-0 flex-col"><dt class="text-[11px] text-sidebar-muted">' . $k . '</dt><dd class="truncate font-semibold tabular-nums">' . h($v) . '</dd></div>';
+            }
+            $c .= '</dl></div>';
+
+            $maxH = max(1, $peakVal);
+            $c .= '<div class="flex flex-col gap-1.5"><div class="flex h-12 items-end gap-[2px]" role="img" aria-label="' . h('Загрузка по часам, ' . $b['name']) . '">';
+            foreach ($hourly as $h => $v) {
+                $future = $h > $hourNow;
+                $tone = $h === $hourNow ? 'bg-brand' : ($future ? 'bg-sidebar-foreground/10' : 'bg-sidebar-foreground/35');
+                $height = $future ? 6 : max(6, (int) round($v / $maxH * 100));
+                $c .= '<span class="flex h-full min-w-0 flex-1 items-end" title="' . h(sprintf('%02d:00 — %d ПК', $h, $v)) . '"><span class="block w-full rounded-t-[2px] ' . $tone . '" style="height:' . $height . '%"></span></span>';
+            }
+            $c .= '</div><div class="flex justify-between text-[10px] text-sidebar-muted tabular-nums"><span>00</span><span>' . ($peak !== null ? 'пик ' . sprintf('%02d:00', $peak) . ' · ' . $peakVal . ' ПК' : 'сегодня') . '</span><span>23</span></div></div>';
+            $cards .= $c . '</article>';
+        }
+        if ($cards === '') {
+            return '';
+        }
+        $totPct = $totPcs > 0 ? (int) round($totActive / $totPcs * 100) : null;
+        $html = '<section class="cut hero-panel flex flex-col gap-5 p-5 sm:p-6" style="--cut:22px" aria-labelledby="club-load">';
+        $html .= '<div class="flex flex-wrap items-center justify-between gap-3"><p id="club-load" class="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-sidebar-muted uppercase"><span class="cut-mark" aria-hidden="true"></span>Посадка в залах</p>';
+        $html .= '<span class="inline-flex items-center gap-2 rounded-[5px] bg-sidebar-accent px-2 py-0.5 text-xs leading-5 font-semibold tabular-nums"><span class="live-dot" aria-hidden="true"></span>' . ($totPct !== null ? $totPct . '% · ' : '') . $totActive . ($totPcs ? ' из ' . $totPcs : '') . ' ПК · ' . h(plural($totSessions, 'сессия', 'сессии', 'сессий')) . ' сегодня</span></div>';
+        $html .= '<div class="grid gap-4 md:grid-cols-2">' . $cards . '</div>';
+        return $html . '</section>';
+    }
+
+    private static function minutesLabel(int $m): string
+    {
+        return $m >= 60 ? intdiv($m, 60) . ' ч ' . str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT) . ' м' : $m . ' мин';
     }
 
     private static function clubsNowCard(array $live, array $soon): string
