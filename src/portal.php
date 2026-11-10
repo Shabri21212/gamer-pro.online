@@ -607,7 +607,7 @@ final class Portal
         header('Content-Type: text/html; charset=utf-8');
         $out = '<!DOCTYPE html><html lang="ru" class="bg-background"><head>';
         $out .= '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">';
-        $out .= '<meta name="color-scheme" content="light dark"><meta name="theme-color" content="#f3f4f6"><meta name="robots" content="noindex, nofollow">';
+        $out .= '<meta name="color-scheme" content="light dark"><meta name="theme-color" content="#f4f4f5"><meta name="robots" content="noindex, nofollow">';
         $out .= '<title>' . h($title . ' · ' . APP_NAME) . '</title>';
         $out .= '<link rel="icon" href="' . h(asset('img/icon-light-32x32.png')) . '" sizes="32x32">';
         $out .= '<link rel="apple-touch-icon" href="' . h(asset('img/apple-icon.png')) . '">';
@@ -615,8 +615,8 @@ final class Portal
         $out .= '<link rel="preload" href="' . h($base . '/assets/fonts/geist-cyrillic.woff2') . '" as="font" type="font/woff2" crossorigin>';
         $out .= '<link rel="preload" href="' . h($base . '/assets/fonts/unbounded-cyrillic.woff2') . '" as="font" type="font/woff2" crossorigin>';
         $out .= '<link rel="stylesheet" href="' . h(asset('css/app.css')) . '">';
-        $out .= '<script>' . THEME_BOOT . '(function(){var m=document.querySelector(\'meta[name="theme-color"]\');if(m&&document.documentElement.classList.contains("dark"))m.content="#0d0f12"})();</script>';
-        $out .= '</head><body class="min-h-dvh bg-background font-sans text-foreground antialiased">';
+        $out .= '<script>' . THEME_BOOT . '(function(){var m=document.querySelector(\'meta[name="theme-color"]\');if(m&&document.documentElement.classList.contains("dark"))m.content="#111113"})();</script>';
+        $out .= '</head><body class="min-h-dvh font-sans text-foreground antialiased' . ($user ? ' app-canvas' : '') . '">';
         $out .= '<a href="#main" class="skip-link">Перейти к содержимому</a>';
         if ($user) {
             $out .= self::shell($user, $path, $title, $inner, (string) ($opts['width'] ?? 'default'));
@@ -679,7 +679,7 @@ final class Portal
         $out .= '</ul></nav>';
 
         $out .= '<div id="nav-drawer" class="fixed inset-0 z-50 hidden lg:hidden" data-nav-drawer role="dialog" aria-modal="true" aria-label="Меню портала">';
-        $out .= '<button type="button" class="absolute inset-0 size-full bg-black/55 backdrop-blur-sm" data-close-nav aria-label="Закрыть меню" tabindex="-1"></button>';
+        $out .= '<button type="button" class="absolute inset-0 size-full bg-black/55 backdrop-blur-sm" data-close-nav aria-label="Закры��ь меню" tabindex="-1"></button>';
         $out .= '<div class="drawer-panel absolute inset-y-0 left-0 flex w-80 max-w-[86vw] flex-col bg-sidebar pt-[env(safe-area-inset-top)] text-sidebar-foreground shadow-2xl">' . self::sidebar($user, $counts, $path, true) . '</div></div>';
         return $out . '</div>';
     }
@@ -704,8 +704,8 @@ final class Portal
                 $active = $activeItem && $activeItem['href'] === $item['href'];
                 $count = !empty($item['badge']) ? (int) ($counts[$item['badge']] ?? 0) : 0;
                 $cls = $active
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground';
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_var(--sidebar-border)]'
+                    : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground';
                 $html .= '<li><a href="' . h(url_to($item['href'])) . '" class="relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ' . $cls . '"' . ($active ? ' aria-current="page"' : '') . '>';
                 if ($active) {
                     $html .= '<span class="nav-mark" aria-hidden="true"></span>';

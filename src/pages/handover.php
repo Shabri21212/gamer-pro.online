@@ -163,7 +163,7 @@ trait PagesHandover
             default => '<span class="rounded-[5px] bg-sidebar-accent px-2 py-0.5 text-xs leading-5 font-semibold">Закончилась</span>',
         };
         $tone = $type === 'night' ? 'text-night-strong' : 'text-day-strong';
-        $html = '<section class="cut flex flex-col gap-5 bg-sidebar p-5 text-sidebar-accent-foreground" style="--cut:20px" aria-labelledby="handover-shift">';
+        $html = '<section class="cut hero-panel flex flex-col gap-5 p-5 " style="--cut:20px" aria-labelledby="handover-shift">';
         $html .= '<div class="flex flex-wrap items-center justify-between gap-2"><p class="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-sidebar-muted uppercase"><span class="cut-mark" aria-hidden="true"></span>Ваша смена</p>' . $badge . '</div>';
         $html .= '<div class="flex flex-col gap-1.5"><p id="handover-shift" class="font-display text-2xl leading-none font-semibold tracking-tight">' . h((string) $shift['branchName']) . '</p>';
         $html .= '<p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-sidebar-foreground">' . icon(SHIFT_ICONS[$type] ?? 'sun', 'size-4 ' . $tone);

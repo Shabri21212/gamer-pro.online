@@ -104,7 +104,7 @@ trait PagesShifts
 
     private static function shiftTicket(?array $s, array $live, string $today, ?string $handoverPhase = null): string
     {
-        $html = '<section class="cut relative flex flex-col gap-6 bg-sidebar p-5 text-sidebar-accent-foreground sm:p-7" style="--cut:26px" aria-labelledby="my-shift-title">';
+        $html = '<section class="cut hero-panel relative flex flex-col gap-6 p-5  sm:p-7" style="--cut:26px" aria-labelledby="my-shift-title">';
         $html .= '<img src="' . h(asset('img/club/hall-wide-sm.webp')) . '" alt="" class="pointer-events-none absolute inset-y-0 right-0 hidden h-full w-1/2 object-cover opacity-25 [mask-image:linear-gradient(to_left,black,transparent)] sm:block" aria-hidden="true">';
         $html .= '<div class="relative flex flex-wrap items-center justify-between gap-3"><p class="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-sidebar-muted uppercase"><span class="cut-mark" aria-hidden="true"></span>Моя смена</p>';
         if (!$s) {
@@ -260,7 +260,7 @@ trait PagesShifts
 
     private static function clubsNowHero(array $live, array $soon): string
     {
-        $html = '<section class="cut flex flex-col gap-6 bg-sidebar p-5 text-sidebar-accent-foreground sm:p-7" style="--cut:26px" aria-labelledby="clubs-now">';
+        $html = '<section class="cut hero-panel flex flex-col gap-6 p-5  sm:p-7" style="--cut:26px" aria-labelledby="clubs-now">';
         $html .= '<div class="flex flex-wrap items-center justify-between gap-3"><p id="clubs-now" class="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-sidebar-muted uppercase"><span class="cut-mark" aria-hidden="true"></span>Сейчас в клубах</p>';
         $html .= '<span class="inline-flex items-center gap-2 rounded-[5px] bg-sidebar-accent px-2 py-0.5 text-xs leading-5 font-semibold"><span class="live-dot" aria-hidden="true"></span>' . h(plural(count($live), 'человек', 'человека', 'человек')) . ' на смене</span></div>';
         $html .= '<div class="grid gap-6 sm:grid-cols-2">' . self::clubBranchRows($live, $soon, true) . '</div>';

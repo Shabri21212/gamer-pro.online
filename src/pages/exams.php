@@ -171,7 +171,7 @@ trait PagesExams
         $hero .= '<p class="text-sm text-sidebar-foreground">' . ($xp['total'] < 1 ? 'Опубликованных экзаменов пока нет' : ($xp['toNext'] > 0 ? 'До уровня ' . ($xp['level'] + 1) . ' — ' . $xp['toNext'] . ' XP' : 'Максимальный уровень — все экзамены сданы')) . '</p></div></div>';
         $hero .= '<dl class="grid grid-cols-2 gap-6 text-sm"><div><dt class="text-sidebar-muted">Сдано</dt><dd class="font-display text-xl font-semibold tabular-nums">' . $xp['passed'] . ' из ' . $xp['published'] . '</dd></div><div><dt class="text-sidebar-muted">Курс</dt><dd class="font-display text-xl font-semibold tabular-nums">' . ($xp['total'] > 0 ? (int) round($xp['earned'] / $xp['total'] * 100) : 0) . '%</dd></div></dl></div>';
         $hero .= '<div class="relative h-1.5 overflow-hidden rounded-full bg-sidebar-accent" role="progressbar" aria-label="Прогресс до следующего уровня" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . $xp['bar'] . '"><div class="h-full rounded-full bg-primary" style="width:' . $xp['bar'] . '%"></div></div>';
-        $html .= '<section class="cut flex flex-col gap-5 bg-sidebar p-5 text-sidebar-accent-foreground sm:p-7" style="--cut:22px" aria-label="Ваш уровень">' . $hero . '</section>';
+        $html .= '<section class="cut hero-panel flex flex-col gap-5 p-5  sm:p-7" style="--cut:22px" aria-label="Ваш уровень">' . $hero . '</section>';
 
         if (!$catalog) {
             $html .= empty_state('grad', 'Экзаменов пока нет', $manage ? 'Создайте первый тест — кнопка «Новый экзамен».' : 'Когда руководитель добавит тесты, они появятся здесь.');
@@ -371,7 +371,7 @@ trait PagesExams
         $hero .= '<p class="font-display text-3xl font-semibold">' . ($passed ? 'Экзамен сдан' : 'Пока не сдан') . '</p>';
         $hero .= '<p class="text-sm text-sidebar-foreground">' . (int) $attempt['earnedPoints'] . ' из ' . (int) $attempt['maxPoints'] . ' верно · проходной ' . $exam['passPercent'] . '% · ' . h(format_dt((string) $attempt['submittedAt'])) . '</p></div>';
         $hero .= '<span class="font-display text-6xl leading-none font-semibold tabular-nums ' . ($passed ? 'text-sidebar-accent-foreground' : 'text-brand') . '">' . $score . '<span class="text-3xl">%</span></span>';
-        $html .= '<section class="cut flex flex-col justify-between gap-5 bg-sidebar p-6 text-sidebar-accent-foreground sm:flex-row sm:items-end sm:p-8" style="--cut:22px">' . $hero . '</section>';
+        $html .= '<section class="cut hero-panel flex flex-col justify-between gap-5 p-6  sm:flex-row sm:items-end sm:p-8" style="--cut:22px">' . $hero . '</section>';
         if (!$other) {
             $html .= '<div class="flex flex-wrap gap-2">' . form_open('start_attempt') . hidden('slug', $slug) . '<button class="' . btn_class($passed ? 'outline' : 'primary') . '">' . icon('refresh', 'size-4') . 'Пересдать</button></form><a class="' . btn_class('ghost') . '" href="' . h(url_to('/exams')) . '">Все экзамены</a></div>';
         }

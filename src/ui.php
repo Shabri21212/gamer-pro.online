@@ -160,7 +160,7 @@ function confirm_attr(string $message): string
     return 'data-confirm="' . h($message) . '"';
 }
 
-/** Подпись + поле внутри ��дного <label>, чтобы клик по подписи фокусировал поле. */
+/** Подпись + поле внутри ����дного <label>, чтобы клик по подписи фокусировал поле. */
 function ui_field(string $label, string $control, string $hint = '', string $class = ''): string
 {
     $html = '<label class="flex min-w-0 flex-col gap-1.5 ' . h($class) . '"><span class="text-sm font-medium text-foreground">' . h($label) . '</span>' . $control;
@@ -221,14 +221,14 @@ function page_head(string $title, string $lead = '', string $actions = '', ?stri
 
 function card(string $inner, string $class = '', string $tag = 'section', string $attrs = ''): string
 {
-    return '<' . $tag . ' class="rounded-lg border border-border bg-card text-card-foreground shadow-xs ' . h($class) . '"' . ($attrs !== '' ? ' ' . $attrs : '') . '>' . $inner . '</' . $tag . '>';
+    return '<' . $tag . ' class="surface rounded-lg border border-border bg-card text-card-foreground shadow-xs ' . h($class) . '"' . ($attrs !== '' ? ' ' . $attrs : '') . '>' . $inner . '</' . $tag . '>';
 }
 
 function card_head(string $title, string $meta = '', string $actions = '', string $iconName = '', string $class = ''): string
 {
     $html = '<div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 ' . h($class) . '"><div class="flex min-w-0 items-start gap-3">';
     if ($iconName !== '') {
-        $html .= '<span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">' . icon($iconName, 'size-4') . '</span>';
+        $html .= '<span class="icon-tile mt-0.5 size-8">' . icon($iconName, 'size-4') . '</span>';
     }
     $html .= '<div class="flex min-w-0 flex-col gap-0.5"><h2 class="text-base leading-snug font-semibold text-pretty">' . h($title) . '</h2>';
     if ($meta !== '') {
@@ -385,10 +385,10 @@ function stat_tile(string $label, string $value, string $hint = '', string $href
     $tag = $href !== '' ? 'a' : 'div';
     $attrs = $href !== '' ? ' href="' . h($href) . '"' : '';
     $hover = $href !== '' ? ' transition-colors hover:border-foreground/20 hover:bg-muted/40' : '';
-    $html = '<' . $tag . $attrs . ' class="group flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-4 shadow-xs' . $hover . '">';
+    $html = '<' . $tag . $attrs . ' class="surface group flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-4 shadow-xs' . $hover . '">';
     $html .= '<div class="flex items-center justify-between gap-2"><span class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">' . h($label) . '</span>';
     if ($iconName !== '') {
-        $html .= '<span class="' . ($alert ? 'text-primary' : 'text-muted-foreground') . '">' . icon($iconName, 'size-4') . '</span>';
+        $html .= '<span class="icon-tile size-7">' . icon($iconName, 'size-3.5') . '</span>';
     }
     $html .= '</div><span class="font-display text-2xl leading-none font-semibold tracking-tight tabular-nums' . ($alert ? ' text-primary-ink' : '') . '">' . $value . '</span>';
     if ($hint !== '') {

@@ -75,7 +75,7 @@ trait PagesBar
         }
         $html = page_head('Продажи бара', 'Всё, что вы пробили в Langame на своей смене, — и ваш процент с этого. Обновляется само каждые ' . (Langame::AUTO_SYNC_SECONDS / 60) . ' минуты.', $branchTabs, $branch['name']);
 
-        $hero = '<section class="relative isolate overflow-hidden rounded-xl border border-border bg-sidebar text-sidebar-foreground shadow-sm">';
+        $hero = '<section class="relative isolate overflow-hidden hero-panel rounded-xl text-sidebar-foreground shadow-sm">';
         $hero .= '<img src="' . h(asset('img/club/lounge.webp')) . '" srcset="' . h(asset('img/club/lounge-sm.webp')) . ' 800w, ' . h(asset('img/club/lounge.webp')) . ' 1600w" sizes="(min-width: 1024px) 60vw, 100vw" alt="" aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 size-full object-cover opacity-35 [mask-image:linear-gradient(to_left,black_10%,transparent_85%)]">';
         $hero .= '<div class="flex flex-col gap-5 p-5 sm:p-7">';
         $hero .= '<div class="flex flex-wrap items-center justify-between gap-3"><p class="text-[11px] font-semibold tracking-[0.18em] text-sidebar-foreground/60 uppercase">Ваш процент · ' . h($month['name']) . '</p>';
@@ -260,7 +260,7 @@ trait PagesBar
         if ($month['isCurrent']) {
             $pcTotal = (int) ($branch['pcCount'] ?? 0);
             $active = $live['active'] ?? null;
-            $hero = '<section class="relative isolate overflow-hidden rounded-xl border border-border bg-sidebar text-sidebar-foreground shadow-sm" aria-labelledby="club-now">';
+            $hero = '<section class="relative isolate overflow-hidden hero-panel rounded-xl text-sidebar-foreground shadow-sm" aria-labelledby="club-now">';
             $hero .= '<img src="' . h(asset('img/club/lounge.webp')) . '" srcset="' . h(asset('img/club/lounge-sm.webp')) . ' 800w, ' . h(asset('img/club/lounge.webp')) . ' 1600w" sizes="(min-width: 1024px) 60vw, 100vw" alt="" aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 size-full object-cover opacity-35 [mask-image:linear-gradient(to_left,black_10%,transparent_85%)]">';
             $hero .= '<div class="flex flex-col gap-6 p-5 sm:p-7 lg:flex-row lg:items-end lg:justify-between">';
             $hero .= '<div class="flex flex-col gap-4"><p id="club-now" class="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-sidebar-foreground/60 uppercase"><span class="size-2 rounded-full bg-primary" aria-hidden="true"></span>Клуб сейчас</p>';

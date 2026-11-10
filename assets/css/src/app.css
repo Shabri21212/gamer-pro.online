@@ -72,26 +72,32 @@
 
 :root {
   color-scheme: light;
-  --background: #f3f4f6;
-  --foreground: #111418;
+  /* Палитра бренда: чёрный графит, белый, фирменный красный логотипа. Серые — нейтральные, без синего отлива. */
+  --background: #f4f4f5;
+  --foreground: #121214;
   --card: #ffffff;
-  --card-foreground: #111418;
+  --card-foreground: #121214;
   --popover: #ffffff;
-  --popover-foreground: #111418;
-  --primary: #d32f2f;
+  --popover-foreground: #121214;
+  --primary: #d92d27;
   --primary-foreground: #ffffff;
-  --primary-ink: #b71c1c;
-  --secondary: #e8eaee;
-  --secondary-foreground: #111418;
-  --muted: #eef0f3;
-  --muted-foreground: #5a636f;
-  --accent: #eef0f3;
-  --accent-foreground: #111418;
-  --destructive: #d32f2f;
-  --border: #dfe2e7;
-  --input: #cfd4db;
-  --ring: #3b4250;
-  --brand: #e53935;
+  --primary-ink: #b8211c;
+  --secondary: #ececee;
+  --secondary-foreground: #121214;
+  --muted: #f0f0f2;
+  --muted-foreground: #5c5c66;
+  --accent: #ececee;
+  --accent-foreground: #121214;
+  --destructive: #d92d27;
+  --border: #e2e2e6;
+  --input: #d2d2d8;
+  --ring: #d92d27;
+  --brand: #e5322d;
+
+  /* Тёмные «геройские» панели — одинаково тёмные в обеих темах */
+  --hero: #141416;
+  --hero-edge: rgb(255 255 255 / 0.06);
+  --canvas-line: rgb(18 18 20 / 0.045);
 
   --day: #fbecd0;
   --day-foreground: #6a4206;
@@ -101,50 +107,55 @@
   --night-strong: #86acf2;
 
   /* Боковая панель тёмная в обеих темах */
-  --sidebar: #0f1216;
-  --sidebar-foreground: #c3c8d0;
-  --sidebar-muted: #8b929c;
-  --sidebar-accent: #1b2027;
-  --sidebar-accent-foreground: #f4f5f7;
-  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar: #111113;
+  --sidebar-foreground: #c8c8cd;
+  --sidebar-muted: #8a8a93;
+  --sidebar-accent: #222226;
+  --sidebar-accent-foreground: #f6f6f7;
+  --sidebar-border: rgb(255 255 255 / 0.07);
 }
 
 .dark {
   color-scheme: dark;
-  --background: #0d0f12;
-  --foreground: #e7e9ec;
-  --card: #15181d;
-  --card-foreground: #e7e9ec;
-  --popover: #1a1e24;
-  --popover-foreground: #e7e9ec;
-  --primary: #c62828;
+  /* Три уровня: сайдбар (глубже) → фон → карточки (светлее). Чистый графит, без синевы. */
+  --background: #111113;
+  --foreground: #f2f2f3;
+  --card: #18181b;
+  --card-foreground: #f2f2f3;
+  --popover: #1f1f23;
+  --popover-foreground: #f2f2f3;
+  --primary: #e5322d;
   --primary-foreground: #ffffff;
-  --primary-ink: #ff8a80;
-  --secondary: #1f242b;
-  --secondary-foreground: #e7e9ec;
-  --muted: #1c2026;
-  --muted-foreground: #9aa2ad;
-  --accent: #1f242b;
-  --accent-foreground: #e7e9ec;
-  --destructive: #ff8a80;
-  --border: #262b33;
-  --input: #323842;
-  --ring: #c9cfd8;
-  --brand: #ef5350;
+  --primary-ink: #ff6a64;
+  --secondary: #232327;
+  --secondary-foreground: #f2f2f3;
+  --muted: #1e1e22;
+  --muted-foreground: #a1a1aa;
+  --accent: #232327;
+  --accent-foreground: #f2f2f3;
+  --destructive: #ff6a64;
+  --border: #29292e;
+  --input: #36363c;
+  --ring: #ff6a64;
+  --brand: #ee3b35;
 
-  --day: #392b14;
-  --day-foreground: #f3d396;
+  --hero: #19191c;
+  --hero-edge: rgb(255 255 255 / 0.07);
+  --canvas-line: rgb(255 255 255 / 0.028);
+
+  --day: #33271a;
+  --day-foreground: #f1d29a;
   --day-strong: #f2b54e;
-  --night: #172338;
-  --night-foreground: #b4cbf5;
+  --night: #1d2230;
+  --night-foreground: #bccbef;
   --night-strong: #8fb3f5;
 
-  --sidebar: #090b0e;
-  --sidebar-foreground: #c3c8d0;
-  --sidebar-muted: #878e98;
-  --sidebar-accent: #171b21;
-  --sidebar-accent-foreground: #f4f5f7;
-  --sidebar-border: rgb(255 255 255 / 0.07);
+  --sidebar: #0b0b0c;
+  --sidebar-foreground: #c8c8cd;
+  --sidebar-muted: #85858e;
+  --sidebar-accent: #1c1c20;
+  --sidebar-accent-foreground: #f6f6f7;
+  --sidebar-border: rgb(255 255 255 / 0.06);
 }
 
 @theme inline {
@@ -184,6 +195,7 @@
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
+  --color-hero: var(--hero);
 
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -217,6 +229,23 @@
   }
   body {
     font-feature-settings: "liga", "calt";
+  }
+  /*
+   * Фон рабочей области: ровный графит + едва заметная сетка 32px, которая гаснет к низу.
+   * Сетка — «технический» намёк на игровую тему, но не спорит с контентом и красным.
+   */
+  .app-canvas::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(var(--canvas-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--canvas-line) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: -1px -1px;
+    mask-image: linear-gradient(to bottom, #000 0, #000 220px, transparent 620px);
   }
   ::selection {
     background: color-mix(in oklab, var(--primary) 28%, transparent);
@@ -266,6 +295,45 @@
     background: var(--brand);
     clip-path: polygon(0 0, 100% 3px, 100% calc(100% - 3px), 0 100%);
   }
+  /*
+   * Геройская панель: тёмная плита со срезом угла и красной «лампой» по верхнему краю.
+   * В светлой теме — контрастный блок, в тёмной — приподнята над фоном, а не проваливается.
+   */
+  .hero-panel {
+    position: relative;
+    isolation: isolate;
+    background-color: var(--hero);
+    color: var(--sidebar-accent-foreground);
+    box-shadow: inset 0 0 0 1px var(--hero-edge), inset 0 1px 0 rgb(255 255 255 / 0.05);
+  }
+  .hero-panel::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: -1;
+    width: 72px;
+    height: 2px;
+    background: var(--brand);
+  }
+
+  /* Карточки: тонкая верхняя подсветка даёт объём в тёмной теме */
+  .dark .surface {
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035), 0 1px 2px rgb(0 0 0 / 0.35);
+  }
+
+  /* Плашка-иконка в заголовках карточек и плитках */
+  .icon-tile {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    color: var(--primary-ink);
+    background: color-mix(in oklab, var(--primary) 9%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 22%, transparent);
+  }
+
   .live-dot {
     position: relative;
     display: inline-block;
@@ -551,7 +619,7 @@
     animation: step-in 0.2s ease-out both;
   }
 
-  /* Сиденья в чистке клавиатур — как клавиши */
+  /* Сиденья в ч��стке клавиатур — как клавиши */
   .keycap {
     display: flex;
     width: 100%;
