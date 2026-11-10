@@ -184,7 +184,7 @@ trait PagesGuests
         $html .= card($form, 'p-5 lg:sticky lg:top-8');
 
         $html .= '<div id="journal" class="flex min-w-0 scroll-mt-20 flex-col gap-4">';
-        $html .= '<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">' . $journal['tabs'] . $journal['branchNav'] . '</div>';
+        $html .= '<div class="flex flex-col gap-3 2xl:flex-row 2xl:items-end 2xl:justify-between">' . $journal['tabs'] . $journal['branchNav'] . '</div>';
         $html .= $journal['searchForm'];
         if (!$journal['rows']) {
             $html .= $journal['search'] !== ''
@@ -247,7 +247,7 @@ trait PagesGuests
         $html .= card($form, 'p-5 lg:sticky lg:top-8');
 
         $html .= '<div id="journal" class="flex min-w-0 scroll-mt-20 flex-col gap-4">';
-        $html .= '<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">' . $journal['tabs'] . $journal['branchNav'] . '</div>';
+        $html .= '<div class="flex flex-col gap-3 2xl:flex-row 2xl:items-end 2xl:justify-between">' . $journal['tabs'] . $journal['branchNav'] . '</div>';
         $html .= $journal['searchForm'];
         if (!$journal['rows']) {
             $html .= $journal['search'] !== ''
