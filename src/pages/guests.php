@@ -172,29 +172,35 @@ trait PagesGuests
         $tiers = self::loyaltyTiers();
         $tariffs = self::portal_json('tariffs', DEFAULT_TARIFFS);
         $actions = can($user, 'content.edit') ? '<a class="' . btn_class('outline') . '" href="' . h(url_to('/loyalty/edit')) . '">' . icon('pencil', 'size-4') . 'Изменить уровни</a>' : '';
-        $html = page_head('Бонусная система', 'Кэшбек возвращается бонусами с каждого пополнения. Уровень гостя зависит от сыгранных часов. Нажмите на уровень, чтобы посчитать кэшбек.', $actions);
-
+        $html = page_head('Бонусная система', 'Кэшбек возвращается бонусами с каждого пополнения. Уровень гостя зависит от сыгранных часов.', $actions);
+        $html .= '<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">';
         if (!$tiers) {
-            $html .= empty_state('percent', 'Уровни не настроены');
+            $html .= '<div class="lg:col-start-1 lg:row-span-2 lg:row-start-1">' . empty_state('percent', 'Уровни не настроены', 'Добавьте уровни, чтобы считать кэшбек.') . '</div>';
         } else {
-            $cols = [2 => 'lg:grid-cols-2', 3 => 'lg:grid-cols-3', 4 => 'lg:grid-cols-4', 5 => 'lg:grid-cols-5'][min(5, max(2, count($tiers)))];
-            $html .= '<div class="grid gap-3 sm:grid-cols-2 ' . $cols . '" role="radiogroup" aria-label="Уровень гостя" data-tiers>';
+            $first = $tiers[0];
+            $calc = card_head('Кэшбек с пополнения', 'Выберите уровень гостя и введите сумму.', '', 'gift');
+            $calc .= '<div class="mt-5 flex flex-col gap-4">' . ui_field('Сумма пополнения, ₽', '<input class="' . field_class('h-11 text-lg tabular-nums') . '" inputmode="numeric" autocomplete="off" placeholder="1000" data-topup>');
+            $calc .= '<div class="flex flex-wrap gap-1.5" role="group" aria-label="Быстрая сумма">';
+            foreach ([300, 500, 1000, 2000] as $preset) {
+                $calc .= '<button type="button" class="' . btn_class('outline', 'xs') . ' tabular-nums" data-topup-preset="' . $preset . '">' . h(num_fmt($preset)) . '</button>';
+            }
+            $calc .= '</div><div class="flex flex-col gap-1.5 rounded-lg bg-muted/60 px-4 py-3.5" aria-live="polite"><span class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Вернётся бонусами</span>';
+            $calc .= '<output class="font-display text-3xl leading-none font-semibold text-primary-ink tabular-nums" data-cashback>—</output>';
+            $calc .= '<span class="text-sm text-muted-foreground">Уровень <span class="font-semibold text-foreground" data-tier-name>' . h((string) $first['title']) . '</span> · кэшбек <span class="tabular-nums" data-tier-percent>' . (int) $first['cashbackPercent'] . '</span>%</span></div></div>';
+            $html .= card($calc, 'p-5 lg:col-start-2', 'section', 'data-cashback-calc');
+
+            $list = '<div class="flex items-baseline justify-between gap-3 border-b border-border px-4 py-3"><h2 id="tiers-title" class="text-sm font-semibold">Уровень гостя</h2><span class="text-xs text-muted-foreground">сыгранные часы · кэшбек</span></div>';
+            $list .= '<div class="flex flex-col" role="radiogroup" aria-labelledby="tiers-title" data-tiers>';
             foreach ($tiers as $i => $t) {
                 $range = $t['maxHours'] === null || $t['maxHours'] === '' ? 'от ' . (int) $t['minHours'] . ' ч' : (int) $t['minHours'] . '–' . (int) $t['maxHours'] . ' ч';
-                $html .= '<button type="button" role="radio" aria-checked="' . ($i === 0 ? 'true' : 'false') . '" class="tier-card" data-tier data-percent="' . (int) $t['cashbackPercent'] . '" data-title="' . h($t['title']) . '">';
-                $html .= '<span class="flex items-center justify-between gap-2"><span class="font-semibold">' . h($t['title']) . '</span><span class="text-xs text-muted-foreground tabular-nums">' . h($range) . '</span></span>';
-                $html .= '<span class="font-display text-3xl leading-none font-semibold tabular-nums">' . (int) $t['cashbackPercent'] . '<span class="text-lg">%</span></span>';
-                $html .= '<span class="flex items-center gap-1.5 text-xs text-muted-foreground">' . icon('cake', 'size-3.5') . 'В день рождения ' . h(money_rub((int) $t['birthdayBonus'])) . '</span></button>';
+                $list .= '<button type="button" role="radio" aria-checked="' . ($i === 0 ? 'true' : 'false') . '" tabindex="' . ($i === 0 ? '0' : '-1') . '" class="tier-card" data-tier data-percent="' . (int) $t['cashbackPercent'] . '" data-title="' . h((string) $t['title']) . '">';
+                $list .= '<span class="tier-radio" aria-hidden="true"></span>';
+                $list .= '<span class="flex min-w-0 flex-col gap-0.5"><span class="flex flex-wrap items-baseline gap-x-2"><span class="font-semibold">' . h((string) $t['title']) . '</span><span class="text-xs text-muted-foreground tabular-nums">' . h($range) . '</span></span>';
+                $list .= '<span class="flex items-center gap-1.5 text-xs text-muted-foreground">' . icon('cake', 'size-3.5') . 'В день рождения ' . h(money_rub((int) $t['birthdayBonus'])) . '</span></span>';
+                $list .= '<span class="flex flex-col items-end gap-1"><span class="font-display text-xl leading-none font-semibold tabular-nums">' . (int) $t['cashbackPercent'] . '%</span><span class="text-xs font-semibold text-primary-ink tabular-nums" data-tier-cash hidden></span></span></button>';
             }
-            $html .= '</div>';
+            $html .= card($list . '</div>', 'overflow-hidden lg:col-start-1 lg:row-span-2 lg:row-start-1');
         }
-
-        $html .= '<div class="grid items-start gap-6 lg:grid-cols-2">';
-        $calc = card_head('Кэшбек с пополнения', 'Уровень: <span class="font-semibold text-foreground" data-tier-name>' . h((string) ($tiers[0]['title'] ?? '—')) . '</span>', '', 'gift');
-        $calc .= '<div class="mt-5 grid grid-cols-2 items-end gap-4">' . ui_field('Пополнение, ₽', '<input class="' . field_class('h-11 text-lg tabular-nums') . '" inputmode="numeric" placeholder="1000" data-topup>');
-        $calc .= '<div class="flex flex-col gap-1 pb-1"><span class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Вернётся бонусами</span><output class="font-display text-3xl leading-none font-semibold text-primary-ink tabular-nums" data-cashback>—</output></div></div>';
-        $html .= card($calc, 'p-5', 'section', 'data-cashback-calc data-percent="' . (int) ($tiers[0]['cashbackPercent'] ?? 0) . '"');
-
         $time = card_head('Стоимость времени', 'Поминутно по цене часа на базовом тарифе', '', 'timer');
         $branchesT = $tariffs['branches'] ?? [];
         $time .= '<div class="mt-5 flex flex-col gap-4" data-time-calc>';
@@ -215,7 +221,7 @@ trait PagesGuests
             $time .= '</div>';
         }
         $time .= '</div>';
-        $html .= card($time, 'p-5') . '</div>';
+        $html .= card($time, 'p-5 lg:col-start-2') . '</div>';
         self::layout($user, $html, ['title' => 'Бонусная система']);
     }
 

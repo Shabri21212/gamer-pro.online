@@ -155,7 +155,7 @@ trait PagesShifts
         $meta = h(format_date_human($date)) . ($tasks ? ' · выполнено ' . $done . ' из ' . count($tasks) : '');
         $html = card_head('Задания на смену', $meta, '', 'clipboard-list');
         if (!$tasks) {
-            $html .= '<p class="mt-4 text-sm text-muted-foreground">На эту смену заданий нет. Работайте по регламенту из базы знаний.</p>';
+            $html .= '<p class="mt-4 text-sm text-muted-foreground">На эту смену заданий нет. Раб��тайте по регламенту из базы знаний.</p>';
             return card($html, 'p-5');
         }
         $html .= '<ul class="mt-4 flex flex-col gap-2">';
@@ -415,96 +415,120 @@ trait PagesShifts
             $half[$id][(int) substr((string) $r['date'], 8, 2) <= 15 ? 'first' : 'second'] += $w;
             $half[$id]['month'] += $w;
         }
-        $mine = $half[$meId] ?? ['first' => 0, 'second' => 0, 'month' => 0];
+        // Ночная смена после полуночи всё ещё идёт, хотя её дата уже «вчера» — такие смены и их день не гасим.
+        $liveIds = [];
+        foreach (self::liveShifts() as $ls) {
+            $liveIds[(int) $ls['id']] = true;
+        }
 
         $html = page_head('График смен', 'День 08:00–20:00, ночь 20:00–08:00, сутки 08:00–08:00 — по времени клуба.', self::branchSwitch('/schedule', $branch, ['m' => $monthParam]));
 
-        $html .= '<div class="flex flex-wrap items-center justify-between gap-3">';
-        $html .= '<div class="flex items-center gap-2">';
-        $html .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/schedule', ['branch' => $branch['slug'], 'm' => $prevM])) . '" aria-label="Предыдущий месяц">' . icon('chevronleft') . '</a>';
-        $html .= '<h2 class="min-w-40 text-center font-display text-lg font-semibold tracking-tight">' . h(format_month_title($year, $month)) . '</h2>';
-        $html .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/schedule', ['branch' => $branch['slug'], 'm' => $nextM])) . '" aria-label="Следующий месяц">' . icon('chevronright') . '</a>';
+        $monthHref = static fn (?string $m): string => h(url_to('/schedule', ['branch' => $branch['slug'], 'm' => $m]));
+        $html .= '<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3"><div class="flex items-center gap-1.5">';
+        $html .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . $monthHref($prevM) . '" aria-label="Предыдущий месяц">' . icon('chevronleft') . '</a>';
+        $html .= '<h2 class="min-w-40 px-1 text-center font-display text-lg font-semibold tracking-tight">' . h(format_month_title($year, $month)) . '</h2>';
+        $html .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . $monthHref($nextM) . '" aria-label="Следующий месяц">' . icon('chevronright') . '</a>';
         if (!$isCurrentMonth) {
-            $html .= '<a class="' . btn_class('quiet', 'sm') . '" href="' . h(url_to('/schedule', ['branch' => $branch['slug']])) . '">Сегодня</a>';
+            $html .= '<a class="' . btn_class('quiet', 'sm') . '" href="' . $monthHref(null) . '">Сегодня</a>';
         }
-        $html .= '</div><div class="flex flex-wrap items-center gap-2">';
-        $html .= '<div class="hidden flex-wrap items-center gap-1.5 md:flex" aria-label="Обозначения">' . chip('День', 'day', 'sun') . chip('Ночь', 'night', 'moon') . '<span class="inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 text-xs leading-5 font-semibold shift-full text-foreground">' . icon('sun-moon', 'size-3.5') . 'Сутки</span>' . '<span class="inline-flex items-center gap-1 rounded-[5px] border border-dashed border-border px-2 py-0.5 text-xs leading-5 font-semibold text-muted-foreground">' . icon('arrow-up-right', 'size-3.5') . 'В другом клубе</span></div>';
+        $html .= '</div>';
         if ($canEdit) {
+            $html .= '<div class="flex flex-wrap items-center gap-2">';
             $html .= '<button type="button" class="' . btn_class('primary', 'sm') . '" data-paint-toggle aria-expanded="false" aria-controls="paint-panel">' . icon('pencil', 'size-4') . 'Быстрое заполнение</button>';
-            $html .= '<button type="button" class="' . btn_class('outline', 'sm') . '" data-dialog-open="copy-week">' . icon('copy', 'size-4') . 'Повторить неделю</button>';
+            $html .= '<button type="button" class="' . btn_class('outline', 'sm') . '" data-dialog-open="copy-week">' . icon('copy', 'size-4') . 'Повторить неделю</button></div>';
         }
-        $html .= '</div></div>';
+        $html .= '</div>';
         if ($canEdit) {
             $html .= self::paintPanel($branch, $filterEmps);
         }
 
-        $html .= '<div class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Показать смены сотрудника">';
-        $html .= '<button type="button" class="filter-chip" data-emp-filter="" aria-pressed="true">Все</button>';
-        if ($meId && isset($half[$meId])) {
-            $html .= '<button type="button" class="filter-chip" data-emp-filter="' . $meId . '" aria-pressed="false">' . icon('user', 'size-3.5') . 'Мои смены</button>';
-        }
-        foreach ($filterEmps as $id => $n) {
-            if ($id === $meId) {
-                continue;
+        if (count($filterEmps) > 1) {
+            $html .= '<div class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Показать смены сотрудника">';
+            $html .= '<button type="button" class="filter-chip" data-emp-filter="" aria-pressed="true">Все</button>';
+            if ($meId && isset($filterEmps[$meId])) {
+                $html .= '<button type="button" class="filter-chip" data-emp-filter="' . $meId . '" aria-pressed="false">' . icon('user', 'size-3.5') . 'Мои смены</button>';
             }
-            $html .= '<button type="button" class="filter-chip" data-emp-filter="' . $id . '" aria-pressed="false">' . h(short_name($n)) . '</button>';
+            foreach ($filterEmps as $id => $n) {
+                if ($id !== $meId) {
+                    $html .= '<button type="button" class="filter-chip" data-emp-filter="' . $id . '" aria-pressed="false">' . h(short_name($n)) . '</button>';
+                }
+            }
+            $html .= '</div>';
         }
-        $html .= '</div>';
-
-        $html .= '<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">';
-        $html .= '<section class="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-xs" data-half-box data-me="' . $meId . '" data-half="' . h(json_encode($half, JSON_UNESCAPED_UNICODE)) . '"' . ($meId && isset($half[$meId]) ? '' : ' hidden') . '>';
-        $html .= '<div class="flex flex-wrap items-baseline justify-between gap-2"><h3 class="text-sm font-semibold" data-half-title>Ваши смены за месяц</h3><span class="text-xs text-muted-foreground">сутки = 2 смены</span></div>';
-        $html .= '<dl class="grid grid-cols-3 gap-2">';
-        foreach ([['1–15', 'first'], ['16–' . $last, 'second'], ['Месяц', 'month']] as [$lab, $key]) {
-            $html .= '<div class="flex flex-col gap-1 rounded-md bg-muted/60 px-3 py-2.5"><dt class="text-xs text-muted-foreground">' . h($lab) . '</dt><dd class="font-display text-xl font-semibold tabular-nums" data-half-' . $key . '>' . (int) $mine[$key] . '</dd></div>';
-        }
-        $html .= '</dl></section>';
-        $html .= '<section class="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-xs md:col-start-2" data-range-box data-last="' . $last . '">';
-        $html .= '<div class="flex flex-wrap items-center justify-between gap-2"><h3 class="text-sm font-semibold" data-range-title>Посчитать смены за период</h3><div class="flex gap-1.5"><button type="button" class="' . btn_class('outline', 'xs') . '" data-range-preset="1-15">1–15</button><button type="button" class="' . btn_class('outline', 'xs') . '" data-range-preset="16-end">16–' . $last . '</button><button type="button" class="' . btn_class('quiet', 'xs') . ' hidden" data-range-clear>Сбросить</button></div></div>';
-        $html .= '<div data-range-body><p class="text-sm leading-relaxed text-muted-foreground"><span class="hidden md:inline">Зажмите мышь на дне и протяните — выделятся даты. </span>Или выберите половину месяца кнопками.</p></div></section>';
-        $html .= '</div>';
 
         $lead = monday_first_weekday($year, $month, 1);
-        $html .= '<div class="cal" data-month-grid data-year="' . $year . '" data-month="' . $month . '" data-last="' . $last . '" data-me="' . $meId . '" data-can-edit="' . ($canEdit ? '1' : '0') . '">';
+        $trail = (7 - ($lead + $last) % 7) % 7;
+        $html .= '<section class="cal" aria-label="' . h('Смены · ' . format_month_title($year, $month) . ' · ' . $branch['name']) . '" data-month-grid data-year="' . $year . '" data-month="' . $month . '" data-last="' . $last . '" data-can-edit="' . ($canEdit ? '1' : '0') . '">';
         $html .= '<div class="cal-head" aria-hidden="true">';
-        foreach (WEEKDAY_SHORT as $i => $lab) {
-            $html .= '<div class="' . ($i >= 5 ? 'text-primary-ink' : '') . '">' . $lab . '</div>';
+        foreach (WEEKDAY_SHORT as $lab) {
+            $html .= '<div>' . $lab . '</div>';
         }
-        $html .= '</div><div class="cal-grid">';
-        for ($i = 0; $i < $lead; $i++) {
-            $html .= '<div class="cal-pad" aria-hidden="true"></div>';
-        }
+        $html .= '</div><div class="cal-grid">' . str_repeat('<div class="cal-pad" aria-hidden="true"></div>', $lead);
         foreach ($byDate as $key => $cell) {
             $wd = weekday_from_date_key($key);
             $count = count($cell['shifts']);
-            $cls = 'cal-day';
-            if ($key === $today) {
-                $cls .= ' is-today';
-            } elseif ($key < $today) {
-                $cls .= ' is-past';
-            }
-            if ($wd >= 5) {
-                $cls .= ' is-weekend';
-            }
-            $label = format_date_human($key) . ': ' . ($count ? plural($count, 'смена', 'смены', 'смен') : 'смен нет');
-            $html .= '<div class="' . $cls . '" role="button" tabindex="0" data-date-key="' . h($key) . '" aria-label="' . h($label) . '">';
-            $html .= '<div class="cal-meta"><span class="cal-num">' . $cell['day'] . '</span><span class="cal-wd">' . h(WEEKDAY_LONG[$wd]) . '</span>';
-            if ($key === $today) {
-                $html .= '<span class="cal-today">сегодня</span>';
-            }
-            $html .= '</div><div class="cal-shifts">';
+            $hasDay = $hasNight = $hasLive = false;
+            $items = '';
             foreach ($cell['shifts'] as $s) {
-                $html .= '<div class="min-w-0" data-emp="' . (int) $s['employeeId'] . '" data-emp-name="' . h($s['employeeName']) . '" data-shift-id="' . (int) $s['id'] . '" data-weight="' . shift_weight((string) $s['shiftType']) . '" data-type="' . h($s['shiftType']) . '">' . shift_chip($s, ['me' => $meId]) . '</div>';
+                $live = isset($liveIds[(int) $s['id']]);
+                $hasLive = $hasLive || $live;
+                $hasDay = $hasDay || $s['shiftType'] !== 'night';
+                $hasNight = $hasNight || $s['shiftType'] !== 'day';
+                $items .= self::calItem($s, $meId, $live);
             }
             foreach ($cell['away'] as $a) {
-                $html .= '<div class="min-w-0" data-emp="' . (int) $a['employeeId'] . '" data-emp-name="' . h($a['employeeName']) . '" data-shift-id="' . (int) $a['id'] . '" data-weight="' . shift_weight((string) $a['shiftType']) . '" data-type="' . h($a['shiftType']) . '" data-away="' . h($a['atBranchName']) . '">' . shift_chip($a, ['me' => $meId]) . '</div>';
+                $live = isset($liveIds[(int) $a['id']]);
+                $hasLive = $hasLive || $live;
+                $items .= self::calItem($a, $meId, $live, (string) $a['atBranchName']);
             }
-            if (!$cell['shifts'] && !$cell['away']) {
-                $html .= '<span class="cal-empty">' . ($canEdit ? icon('plus', 'size-3.5') . 'поставить' : 'нет смен') . '</span>';
+            foreach (['day' => $hasDay, 'night' => $hasNight] as $slot => $taken) {
+                $items .= '<span class="cal-slot' . ($taken ? ' hidden' : '') . '" data-slot-empty="' . $slot . '" aria-hidden="true">' . icon(SHIFT_ICONS[$slot], 'cal-chip-icon') . '—</span>';
             }
-            $html .= '</div></div>';
+            $cls = 'cal-day' . ($hasLive ? ' has-live' : '') . ($wd >= 5 ? ' is-weekend' : '');
+            if ($key === $today) {
+                $cls .= ' is-today';
+            } elseif ($key < $today && !$hasLive) {
+                $cls .= ' is-past';
+            }
+            $label = format_date_human($key) . ($key === $today ? ', сегодня' : '') . ': ' . ($count ? plural($count, 'смена', 'смены', 'смен') : 'смен нет') . ($hasLive ? ', смена идёт сейчас' : '');
+            $html .= '<div class="' . $cls . '" role="button" tabindex="0" data-date-key="' . h($key) . '" aria-label="' . h($label) . '">';
+            $html .= '<div class="cal-date"><span class="cal-num">' . $cell['day'] . '</span><span class="cal-wd">' . h(mb_strtolower(WEEKDAY_SHORT[$wd])) . '</span></div>';
+            $html .= '<div class="cal-shifts">' . $items . '</div></div>';
         }
-        $html .= '</div></div>';
+        $html .= str_repeat('<div class="cal-pad" aria-hidden="true"></div>', $trail) . '</div>';
+        $html .= '<div class="cal-legend" aria-label="Обозначения">';
+        foreach (['day' => 'День', 'night' => 'Ночь', 'full' => 'Сутки'] as $tone => $lab) {
+            $html .= '<span class="cal-legend-item"><span class="cal-key" data-tone="' . $tone . '" aria-hidden="true"></span>' . $lab . '</span>';
+        }
+        $html .= '<span class="cal-legend-item">' . icon('arrow-up-right', 'size-3.5') . 'Вышел в другом филиале</span>';
+        $html .= '<span class="cal-legend-item"><span class="cal-chip-live"><span class="live-dot" aria-hidden="true"></span></span>Идёт сейчас</span></div></section>';
+
+        $sumIds = array_values(array_filter(array_keys($filterEmps), static fn ($id) => isset($half[$id])));
+        if ($sumIds) {
+            $num = static fn (int $n): string => $n > 0 ? (string) $n : '<span class="text-muted-foreground">—</span>';
+            $thc = 'px-3 py-2 text-right text-xs font-semibold tracking-wide whitespace-nowrap uppercase sm:px-4';
+            $tdc = 'px-3 py-2.5 text-right tabular-nums sm:px-4';
+            $total = ['first' => 0, 'second' => 0, 'month' => 0];
+            $html .= '<section class="overflow-hidden rounded-xl border border-border bg-card shadow-xs" aria-labelledby="sum-title" data-summary>';
+            $html .= '<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-5"><div class="flex min-w-0 flex-col gap-0.5"><h3 id="sum-title" class="text-sm font-semibold">Смены за ' . h(mb_strtolower(MONTH_NAMES[$month])) . '</h3>';
+            $html .= '<p class="text-xs leading-relaxed text-pretty text-muted-foreground">Сутки считаются за две смены. В счёт идут и выходы в другом филиале.</p></div>';
+            $html .= '<p class="hidden text-xs text-muted-foreground lg:block" data-range-hint>Протяните мышью по дням, чтобы посчитать смены за период</p>';
+            $html .= '<div class="flex items-center gap-2 text-sm" data-range-info hidden><span class="text-muted-foreground">Период</span><span class="font-semibold" data-range-label></span><button type="button" class="' . btn_class('outline', 'xs') . '" data-range-clear>Сбросить</button></div></div>';
+            $html .= '<div class="overflow-x-auto border-t border-border"><table class="w-full text-sm"><thead class="bg-muted/50 text-muted-foreground"><tr><th scope="col" class="px-4 py-2 text-left text-xs font-semibold tracking-wide uppercase sm:px-5">Сотрудник</th>';
+            $html .= '<th scope="col" class="' . $thc . '">1–15</th><th scope="col" class="' . $thc . '">16–' . $last . '</th><th scope="col" class="' . $thc . '">Месяц</th><th scope="col" class="' . $thc . ' text-primary-ink" data-range-col hidden>Период</th></tr></thead><tbody>';
+            foreach ($sumIds as $id) {
+                $r = $half[$id];
+                foreach ($total as $k => $v) {
+                    $total[$k] = $v + (int) $r[$k];
+                }
+                $html .= '<tr class="sum-row border-t border-border' . ($id === $meId ? ' is-mine' : '') . '" data-sum-emp="' . $id . '"><th scope="row" class="px-4 py-2.5 text-left font-medium sm:px-5"><span class="flex items-center gap-2"><span class="min-w-0 truncate">' . h((string) $r['name']) . '</span>' . ($id === $meId ? chip('вы', 'red') : '') . '</span></th>';
+                $html .= '<td class="' . $tdc . '">' . $num((int) $r['first']) . '</td><td class="' . $tdc . '">' . $num((int) $r['second']) . '</td><td class="' . $tdc . ' font-semibold">' . $num((int) $r['month']) . '</td>';
+                $html .= '<td class="' . $tdc . ' font-semibold text-primary-ink" data-range-cell hidden>0</td></tr>';
+            }
+            $html .= '</tbody><tfoot><tr class="border-t border-border bg-muted/40 font-semibold"><th scope="row" class="px-4 py-2.5 text-left sm:px-5">Всего</th>';
+            $html .= '<td class="' . $tdc . '">' . $num($total['first']) . '</td><td class="' . $tdc . '">' . $num($total['second']) . '</td><td class="' . $tdc . '">' . $num($total['month']) . '</td>';
+            $html .= '<td class="' . $tdc . ' text-primary-ink" data-range-total hidden>0</td></tr></tfoot></table></div></section>';
+        }
 
         $body = '<div class="flex flex-col gap-2" data-existing></div>';
         if ($canEdit) {
@@ -512,8 +536,10 @@ trait PagesShifts
             $body .= form_open('save_day', 'class="flex flex-col gap-4 border-t border-border pt-4" data-day-form') . hidden('branchId', $branch['id']) . '<input type="hidden" name="date" value="" data-dialog-date>';
             $body .= '<p class="text-sm font-semibold">Поставить на этот день · ' . h($branch['name']) . '</p>';
             $body .= '<div class="grid gap-3 sm:grid-cols-2">';
-            $body .= ui_field('<span class="inline-flex items-center gap-1.5">' . icon('sun', 'size-4 text-day-strong') . 'Днём · 08–20</span>', ui_select('dayEmployeeId', $opts, '0', 'data-day-slot="day"'));
-            $body .= ui_field('<span class="inline-flex items-center gap-1.5">' . icon('moon', 'size-4 text-night-strong') . 'Ночью · 20–08</span>', ui_select('nightEmployeeId', $opts, '0', 'data-day-slot="night"'));
+            // ui_field() экранирует подпись, поэтому подпись с иконкой собираем здесь.
+            foreach ([['day', 'sun', 'text-day-strong', 'Днём · 08–20', 'dayEmployeeId'], ['night', 'moon', 'text-night-strong', 'Ночью · 20–08', 'nightEmployeeId']] as [$slot, $ic, $tone, $text, $name]) {
+                $body .= '<label class="flex min-w-0 flex-col gap-1.5"><span class="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">' . icon($ic, 'size-4 ' . $tone) . h($text) . '</span>' . ui_select($name, $opts, '0', 'data-day-slot="' . $slot . '"') . '</label>';
+            }
             $body .= '</div><p class="text-xs leading-relaxed text-muted-foreground">Один и тот же сотрудник днём и ночью — встанет на сутки. Сотрудник другого филиала встанет как подмена.</p>';
             $body .= '<div class="flex flex-wrap justify-end gap-2"><button type="button" class="' . btn_class('ghost') . '" data-dialog-close>Отмена</button><button class="' . btn_class() . '">' . icon('check', 'size-4') . 'Сохранить день</button></div></form>';
         }
@@ -528,13 +554,25 @@ trait PagesShifts
             $cw .= '<div class="flex flex-wrap justify-end gap-2"><button type="button" class="' . btn_class('ghost') . '" data-dialog-close>Отмена</button><button class="' . btn_class() . '">' . icon('copy', 'size-4') . 'Скопировать</button></div></form>';
             $html .= dialog_html('copy-week', 'Повторить неделю', $cw, 'max-w-lg');
         }
-        self::layout($user, $html, ['title' => 'График смен', 'width' => 'wide']);
+        self::layout($user, $html, ['title' => 'График смен', 'width' => 'wide', 'scripts' => ['schedule']]);
     }
 
-    /** Панель «кисти»: выбрал сотрудника и смену — тыкаешь по дням, всё сохраняется одной кнопкой. */
+    /** Смена в ячейке календаря; data-атрибуты читает schedule.js (фильтр, подсчёт периода, окно дня). */
+    private static function calItem(array $s, int $meId, bool $live, ?string $awayAt = null): string
+    {
+        $type = (string) $s['shiftType'];
+        $attrs = ' data-emp="' . (int) $s['employeeId'] . '" data-emp-name="' . h((string) $s['employeeName']) . '" data-shift-id="' . (int) $s['id'] . '" data-weight="' . shift_weight($type) . '" data-type="' . h($type) . '"';
+        if ($awayAt !== null) {
+            $attrs .= ' data-away="' . h($awayAt) . '"';
+        }
+        return '<div class="cal-item"' . $attrs . ($live ? ' data-live' : '') . '>' . shift_chip($s, ['me' => $meId, 'live' => $live]) . '</div>';
+    }
+
+    /** Панель «кисти»: выбрал сотрудника и смену — тыкаешь по дням, всё сохраняется о��ной кнопкой. */
     private static function paintPanel(array $branch, array $emps): string
     {
-        $html = '<section id="paint-panel" class="sticky top-2 z-20 flex flex-col gap-3 rounded-lg border border-primary/50 bg-card p-4 shadow-lg" data-paint-panel hidden aria-label="Быстрое заполнение графика">';
+        // На телефоне и планшете сверху закреплена шапка высотой 3.5rem — панель встаёт под неё, а не за неё.
+        $html = '<section id="paint-panel" class="sticky top-16 z-20 flex flex-col gap-3 rounded-xl border border-primary/40 bg-card p-4 shadow-lg lg:top-2" data-paint-panel hidden aria-label="Быстрое заполнение графика">';
         $html .= '<div class="flex flex-wrap items-start justify-between gap-2"><div class="flex flex-col gap-0.5"><h3 class="text-sm font-semibold">Быстрое заполнение</h3>';
         $html .= '<p class="text-xs leading-relaxed text-pretty text-muted-foreground">Выберите сотрудника и смену, затем нажимайте на дни. Повторное нажатие убирает смену. Сохраняется всё разом.</p></div>';
         $html .= '<button type="button" class="' . btn_class('quiet', 'icon-sm') . '" data-paint-cancel aria-label="Закрыть без сохранения">' . icon('x', 'size-4') . '</button></div>';
@@ -548,7 +586,7 @@ trait PagesShifts
         $others = self::employeeOptions(null, $branch['id']);
         unset($others[$branch['name']]);
         if ($others) {
-            $html .= '<select class="' . h(select_class('h-8 w-auto shrink-0 text-xs')) . '" data-paint-other aria-label="Сотрудник другого филиала"><option value="">Другой филиал…</option>';
+            $html .= '<select class="' . h(select_class('h-8 max-w-44 shrink-0 text-xs sm:text-xs')) . '" data-paint-other aria-label="Сотрудник другого филиала"><option value="">Другой филиал…</option>';
             foreach ($others as $group => $list) {
                 if (!is_array($list)) {
                     continue;

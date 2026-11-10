@@ -632,7 +632,9 @@ final class Portal
             $out .= '<button type="button" class="-mt-1 -mr-2 ' . btn_class('quiet', 'icon-sm') . '" data-toast-close aria-label="Закрыть уведомление">' . icon('x', 'size-4') . '</button></div></div>';
         }
         $out .= '<script>window.GP=' . json_encode(['csrf' => csrf_token(), 'base' => $base], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) . ';</script>';
-        $out .= '<script src="' . h(asset('js/app.js')) . '" defer></script>';
+        foreach (array_merge(['app', 'pages'], (array) ($opts['scripts'] ?? [])) as $script) {
+            $out .= '<script src="' . h(asset('js/' . $script . '.js')) . '" defer></script>';
+        }
         $out .= '</body></html>';
         echo $out;
     }

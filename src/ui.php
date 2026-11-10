@@ -302,32 +302,33 @@ function shift_tone_class(string $type): string
 }
 
 /**
- * Плашка смены для графика. opts: me (id сотрудника текущего пользователя), full (показывать полное имя).
+ * Плашка смены для графика. opts: me (id сотрудника текущего пользователя), live (смена идёт прямо сейчас).
+ * Разметку повторяет schedule.js для ещё не сохранённых смен «кисти».
  */
 function shift_chip(array $shift, array $opts = []): string
 {
     $type = (string) ($shift['shiftType'] ?? 'day');
     $away = !empty($shift['awayAtBranchName']);
     $mine = !empty($opts['me']) && (int) ($shift['employeeId'] ?? 0) === (int) $opts['me'];
+    $live = !empty($opts['live']);
     $name = (string) ($shift['employeeName'] ?? '');
-    $cls = $away
-        ? 'border border-dashed border-border bg-transparent text-muted-foreground'
-        : shift_tone_class($type);
-    if ($mine && !$away) {
-        $cls .= ' ring-2 ring-primary ring-offset-1 ring-offset-card';
+    $hint = (SHIFT_LABELS[$type] ?? $type) . ' ' . (SHIFT_HINTS[$type] ?? '') . ($away ? ' · в филиале ' . $shift['awayAtBranchName'] : '');
+    $cls = 'cal-chip' . ($away ? ' is-away' : '') . ($mine ? ' is-mine' : '') . ($live ? ' is-live' : '');
+    $html = '<span class="' . $cls . '" data-tone="' . h($type) . '" title="' . h($name . ' · ' . $hint . ($live ? ' · идёт сейчас' : '')) . '">';
+    if ($live) {
+        $html .= '<span class="cal-chip-live"><span class="live-dot" aria-hidden="true"></span></span>';
+    } else {
+        $html .= icon($away ? 'arrow-up-right' : (SHIFT_ICONS[$type] ?? 'sun'), 'cal-chip-icon');
     }
-    $hint = $away ? 'в клубе ' . $shift['awayAtBranchName'] : (SHIFT_LABELS[$type] ?? $type) . ' · ' . (SHIFT_HINTS[$type] ?? '');
-    $html = '<span class="cal-chip ' . $cls . '" title="' . h($name . ' · ' . $hint) . '">';
-    $html .= icon($away ? 'arrow-up-right' : (SHIFT_ICONS[$type] ?? 'sun'), 'cal-chip-icon size-4');
-    $html .= '<span class="cal-chip-body"><span class="cal-chip-name"><span class="cal-name-short">' . h(short_name($name)) . '</span><span class="cal-name-full">' . h($name) . '</span></span>';
-    $html .= '<span class="cal-hint' . ($away ? ' is-always' : '') . '">' . h($hint) . '</span></span>';
-    if ($mine) {
-        $html .= '<span class="sr-only">(вы)</span>';
+    $html .= '<span class="cal-chip-name"><span class="cal-name-short">' . h(short_name($name)) . '</span><span class="cal-name-full">' . h($name) . '</span></span>';
+    if ($away) {
+        $html .= '<span class="cal-chip-sub">' . h((string) $shift['awayAtBranchName']) . '</span>';
     }
     if (!empty($shift['guestFromBranchName'])) {
         $html .= '<span class="cal-badge" title="Подмена из филиала ' . h((string) $shift['guestFromBranchName']) . '">' . h(mb_substr((string) $shift['guestFromBranchName'], 0, 3)) . '</span>';
     }
-    return $html . '</span>';
+    $sr = ($mine ? ' (вы)' : '') . ', ' . mb_strtolower($hint) . ($live ? ', идёт сейчас' : '');
+    return $html . '<span class="sr-only">' . h($sr) . '</span></span>';
 }
 
 function empty_state(string $iconName, string $title, string $text = '', string $action = '', string $class = ''): string
