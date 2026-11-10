@@ -137,6 +137,7 @@ trait PagesManage
         $grade = $user['gradeId'] ? Db::one('SELECT title, "shiftRate" FROM employee_grades WHERE id = ?', [$user['gradeId']]) : null;
         $units = $eid ? (self::shiftUnits($monthFrom, $now->format('Y-m-t'))[$eid] ?? 0) : 0;
         $finesMonth = $eid ? (int) Db::value('SELECT COALESCE(SUM(amount), 0) FROM employee_fines WHERE "employeeId" = ? AND "createdAt" >= ?', [$eid, $monthFrom]) : 0;
+        $fines = $eid ? Db::all('SELECT reason, amount, "createdAt" FROM employee_fines WHERE "employeeId" = ? ORDER BY "createdAt" DESC LIMIT 3', [$eid]) : [];
         $upcoming = $eid ? self::upcomingShiftsFor($eid, 14) : [];
         $xp = self::examXpState(self::examCatalog($user));
 
@@ -205,7 +206,7 @@ trait PagesManage
         $right = card($ex, 'p-5');
 
         if ($eid) {
-            $fi = card_head('Штрафы', h($fines ? 'За ' . $mon . ' — ' . money_rub($finesMonth) : 'Штрафов нет — так держать'), '<a class="' . btn_class('ghost', 'sm') . '" href="' . h(url_to('/fines')) . '">Лист' . icon('arrow', 'size-4') . '</a>', 'wallet');
+            $fi = card_head('Штрафы', h($fines ? 'За ' . $mon . ' — ' . money_rub($finesMonth) . '. Ниже — последние назначения.' : 'Штрафов нет — так держать'), '<a class="' . btn_class('ghost', 'sm') . '" href="' . h(url_to('/fines')) . '">Лист' . icon('arrow', 'size-4') . '</a>', 'wallet');
             if ($fines) {
                 $fi .= '<ul class="mt-4 flex flex-col divide-y divide-border">';
                 foreach (array_slice($fines, 0, 3) as $f) {
@@ -345,7 +346,7 @@ trait PagesManage
         if ($e) {
             $f .= hidden('id', (int) $e['id']);
         }
-        $f .= ui_field('Фамилия и имя', '<input name="name" class="' . field_class() . '" required minlength="2" maxlength="60" value="' . h($name) . '" placeholder="Иванов Пётр" autocomplete="off">', 'Сначала фамилия — в графике будет «Иванов П.»');
+        $f .= ui_field('Фамилия и имя', '<input name="name" class="' . field_class() . '" required minlength="2" maxlength="60" value="' . h($name) . '" placeholder="Иванов Пётр" autocomplete="off">', 'Можно указать полное ФИО — в графике оно отображается без сокращения');
         $f .= '<div class="grid gap-4 sm:grid-cols-2">';
         $f .= ui_field('Филиал', ui_select('homeBranchId', self::branchOptions(), $branch, 'required'));
         $f .= ui_field('Уровень', ui_select('gradeId', self::gradeOptions($grades), $grade));
@@ -823,7 +824,7 @@ trait PagesManage
         $dl .= '<p class="text-xs leading-relaxed text-muted-foreground">Файл собирается из текущих данных в момент нажатия. Храните его в надёжном месте — в нём доступы сотрудников.</p></form>';
 
         $steps = [
-            ['В панели reg.ru', 'Откройте «Хостинг» → «Базы данных MySQL». Создайте базу и пользователя или возьмите существующую, например <span class="font-mono">u3622481_default</span>.'],
+            ['В панели reg.ru', 'Откройте «Хостинг» → «Базы данных MySQL». Создайте базу и пользователя или возьмите су��ествующую, например <span class="font-mono">u3622481_default</span>.'],
             ['Импорт в phpMyAdmin', 'Войдите в phpMyAdmin, слева выберите базу → вкладка «Импорт» → выберите <span class="font-mono">localhost.sql</span> → «Вперёд». Таблицы портала создадутся заново.'],
             ['Файлы сайта', 'Залейте папку портала в корень сайта (обычно <span class="font-mono">public_html</span>) вместе со скрытым файлом <span class="font-mono">.htaccess</span>. Версия PHP — 8.1 или новее.'],
             ['Подключение к базе', 'Скопируйте <span class="font-mono">config.example.php</span> в <span class="font-mono">config.php</span> и впишите имя базы, пользователя и пароль из панели reg.ru.'],

@@ -160,7 +160,7 @@ function confirm_attr(string $message): string
     return 'data-confirm="' . h($message) . '"';
 }
 
-/** Подпись + поле внутри ������дного <label>, чтобы клик по подписи фокусировал поле. */
+/** Подпись + поле внутри ��������дного <label>, чтобы клик по подписи фокусировал поле. */
 function ui_field(string $label, string $control, string $hint = '', string $class = ''): string
 {
     $html = '<label class="flex min-w-0 flex-col gap-1.5 ' . h($class) . '"><span class="text-sm font-medium text-foreground">' . h($label) . '</span>' . $control;
@@ -320,7 +320,7 @@ function shift_chip(array $shift, array $opts = []): string
     } else {
         $html .= icon($away ? 'arrow-up-right' : (SHIFT_ICONS[$type] ?? 'sun'), 'cal-chip-icon');
     }
-    $html .= '<span class="cal-chip-name"><span class="cal-name-short">' . h(short_name($name)) . '</span><span class="cal-name-full">' . h($name) . '</span></span>';
+    $html .= '<span class="cal-chip-name"><span class="cal-chip-label">' . h(SHIFT_LABELS[$type] . ' · ' . SHIFT_HINTS[$type]) . '</span><span class="cal-name-short" aria-hidden="true">' . h(short_name($name)) . '</span><span class="cal-name-full">' . h($name) . '</span></span>';
     if ($away) {
         $html .= '<span class="cal-chip-sub">' . h((string) $shift['awayAtBranchName']) . '</span>';
     }

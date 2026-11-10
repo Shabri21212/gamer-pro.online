@@ -7,6 +7,7 @@ declare(strict_types=1);
  * составляет график только Киевской.
  */
 const PERMISSIONS = [
+    'schedule.view_all' => ['group' => 'Смены', 'label' => 'Видеть графики всех филиалов', 'hint' => 'Без этого права сотрудник видит график только своего филиала и свои подмены. Редактирование выдаётся отдельно.', 'scoped' => false],
     'schedule.edit' => ['group' => 'Смены', 'label' => 'Составлять график смен', 'hint' => 'Ставить, менять и убирать смены, копировать неделю', 'scoped' => true],
     'tasks.assign' => ['group' => 'Смены', 'label' => 'Назначать задания на смену', 'hint' => 'Раздел «Задания на смены»', 'scoped' => true],
     'cleaning.assign' => ['group' => 'Смены', 'label' => 'Распределять чистку клавиатур', 'hint' => 'Закреплять места и снимать чужие отметки', 'scoped' => true],
@@ -30,7 +31,7 @@ const ROLES = [
     'manager' => [
         'label' => 'Управляющий',
         'hint' => 'Всё, кроме доступов и паролей',
-        'perms' => ['schedule.edit', 'tasks.assign', 'cleaning.assign', 'issues.resolve', 'news.publish', 'guests.decide', 'content.edit', 'wiki.edit', 'fines.manage', 'exams.manage', 'staff.manage', 'journal.view'],
+        'perms' => ['schedule.view_all', 'schedule.edit', 'tasks.assign', 'cleaning.assign', 'issues.resolve', 'news.publish', 'guests.decide', 'content.edit', 'wiki.edit', 'fines.manage', 'exams.manage', 'staff.manage', 'journal.view'],
     ],
     'senior' => [
         'label' => 'Старший администратор',
@@ -89,6 +90,9 @@ function can(array $user, string $perm, ?int $branchId = null): bool
     if ($perm === 'owner' || !in_array($perm, $user['perms'] ?? [], true)) {
         return false;
     }
+    if ($perm === 'schedule.edit' && $branchId !== null && !can_view_schedule($user, $branchId)) {
+        return false;
+    }
     $scope = $user['scopeBranchId'] ?? null;
     if ($branchId !== null && $scope !== null && !empty(PERMISSIONS[$perm]['scoped'])) {
         return (int) $scope === $branchId;
@@ -114,6 +118,13 @@ function perm_scope(array $user, string $perm): ?int
     }
     $scope = $user['scopeBranchId'] ?? null;
     return $scope === null ? null : (int) $scope;
+}
+
+/** Просмотр не расширяет права редактирования; без привязки доступ закрыт. */
+function can_view_schedule(array $user, int $branchId): bool
+{
+    return can($user, 'schedule.view_all')
+        || ($branchId > 0 && $branchId === (int) ($user['homeBranchId'] ?? 0));
 }
 
 const AUDIT_ENTITIES = [

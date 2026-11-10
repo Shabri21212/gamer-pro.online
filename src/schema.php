@@ -15,7 +15,9 @@ declare(strict_types=1);
  * Индексы: имя => 'колонка,колонка'; «!» в начале — уникальный.
  * Все строковые колонки в MySQL — utf8mb4_bin: сравнение и сортировка как в SQLite.
  */
-const SCHEMA_VERSION = 8;
+require_once __DIR__ . '/branch-upgrade.php';
+
+const SCHEMA_VERSION = 9;
 
 const SCHEMA = [
     'app_meta' => [
@@ -478,6 +480,7 @@ final class Schema
             return;
         }
         try {
+            BranchUpgrade::run($pdo);
             $pdo->prepare('DELETE FROM app_meta WHERE k = ?')->execute(['schema']);
             $pdo->prepare('INSERT INTO app_meta (k, v) VALUES (?, ?)')->execute(['schema', (string) SCHEMA_VERSION]);
         } catch (PDOException $e) {

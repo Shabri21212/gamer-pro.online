@@ -89,7 +89,7 @@ trait PagesBar
         $hero = '<section class="relative isolate overflow-hidden hero-panel rounded-xl text-sidebar-foreground shadow-sm">';
         $hero .= '<img src="' . h(asset('img/club/lounge.webp')) . '" srcset="' . h(asset('img/club/lounge-sm.webp')) . ' 800w, ' . h(asset('img/club/lounge.webp')) . ' 1600w" sizes="(min-width: 1024px) 60vw, 100vw" alt="" aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 size-full object-cover opacity-35 [mask-image:linear-gradient(to_left,black_10%,transparent_85%)]">';
         $hero .= '<div class="flex flex-col gap-5 p-5 sm:p-7">';
-        $hero .= '<div class="flex flex-wrap items-center justify-between gap-3"><p class="text-[11px] font-semibold tracking-[0.18em] text-sidebar-foreground/60 uppercase">Ваш процент · ' . h($month['name']) . '</p>';
+        $hero .= '<div class="flex flex-wrap items-center justify-between gap-3"><p class="text-[11px] font-semibold tracking-[0.18em] text-sidebar-foreground/60 uppercase">Процент по продажам · ' . h($month['name']) . '</p>';
         $hero .= '<span class="inline-flex items-center gap-1.5 rounded-full border border-sidebar-foreground/15 px-2.5 py-1 text-xs font-medium tabular-nums">' . icon('percent', 'size-3.5') . h(pct_label($mine['percentX10'])) . ' с продаж</span></div>';
         if ($linked || $mine['revenue'] > 0) {
             $hero .= '<div class="flex flex-col gap-1"><p class="font-display text-5xl leading-none font-semibold tracking-tight tabular-nums sm:text-6xl">' . h(kop_rub($mine['earn'])) . '</p>';
@@ -103,11 +103,12 @@ trait PagesBar
             $hero .= '<div class="flex max-w-md flex-col gap-2"><p class="font-display text-2xl font-semibold text-balance">Учётка Langame ещё не привязана</p>';
             $hero .= '<p class="text-sm leading-relaxed text-sidebar-foreground/70 text-pretty">Попросите владельца связать вашу запись в портале с вашим логином в админке Langame — после этого здесь появятся ваши продажи.</p></div>';
         }
+        $hero .= '<p class="text-sm leading-relaxed text-sidebar-foreground/70">Это процент по всем продажам выбранного месяца. В зарплату входят продажи с 16-го числа. <a class="font-semibold underline underline-offset-4" href="' . h(url_to('/salary', ['m' => $month['key']])) . '">Открыть расчёт зарплаты</a></p>';
         $hero .= '</div></section>';
 
         $nav = '<div class="flex items-center gap-1"><a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/bar', ['branch' => $branch['slug'], 'm' => $month['prev'], 'view' => 'me'])) . '" aria-label="Предыдущий месяц">' . icon('chevronleft') . '</a>';
         $nav .= '<span class="min-w-32 text-center font-display text-sm font-semibold">' . h($month['title']) . '</span>';
-        $nav .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/bar', ['branch' => $branch['slug'], 'm' => $month['next'], 'view' => 'me'])) . '" aria-label="Следующий месяц">' . icon('chevronright') . '</a></div>';
+        $nav .= '<a class="' . btn_class('outline', 'icon-sm') . '" href="' . h(url_to('/bar', ['branch' => $branch['slug'], 'm' => $month['next'], 'view' => 'me'])) . '" aria-label="Следующ��й месяц">' . icon('chevronright') . '</a></div>';
 
         $sync = '<div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm shadow-xs">';
         $ok = boolish($s['lastSyncOk'] ?? 0);
@@ -177,7 +178,7 @@ trait PagesBar
         $html .= stat_tile('Выручка', h(kop_rub($mine['revenue'])), 'без отменённых', '', 'coins');
         $html .= stat_tile('Позиций', h(num_fmt($mine['qty'])), '', '', 'list');
         $html .= stat_tile('Средняя позиция', h(kop_rub($mine['qty'] > 0 ? (int) round($mine['revenue'] / $mine['qty']) : 0)), '', '', 'tags');
-        $html .= stat_tile('Ваш процент', h(kop_rub($mine['earn'])), h(pct_label($mine['percentX10'])) . ' — войдёт в зарплату', $seeAll ? url_to('/manage/grades') : '', 'wallet');
+        $html .= stat_tile('Процент по продажам', h(kop_rub($mine['earn'])), 'За весь месяц; сумма к выплате — в «Моя зарплата»', url_to('/salary', ['m' => $month['key']]), 'wallet');
         $html .= '</div></section>';
         $html .= '<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]"><div class="flex min-w-0 flex-col gap-6">' . card($list, 'p-5') . ($board !== '' ? card($board, 'p-5') : '') . '</div>' . card($topHtml, 'p-5') . '</div>';
         $html .= '</div>';
@@ -259,7 +260,7 @@ trait PagesBar
         $ready = $connected && (!empty($s['syncedFrom']) || boolish($s['lastSyncOk'] ?? false));
         $content = null;
         if ($tab === 'salary') {
-            $content = '<p class="crm-notice">Предварительный расчёт: смены из графика включают запланированные выходы. Это не подтверждение отработанных смен или выплаты.' . (!$ready ? ' Продажи выбранного филиала не синхронизированы — процент с бара может быть неполным.' : '') . '</p>' . self::barPayroll($user, $month, $q);
+            $content = '<p class="crm-notice">Расчёт по начавшимся сменам: будущие выходы не начисляются. 1–15 — ставка; 16–конец месяца — ставка и процент с продаж за вторую половину месяца. Это не подтверждение фактической выплаты.' . (!$ready ? ' Продажи выбранного филиала не синхронизированы — процент с бара может быть неполным.' : '') . '</p>' . self::barPayroll($user, $month, $q);
         } elseif (!$connected) {
             $content = self::barUnavailable($user);
         } elseif ($tab === 'occupancy') {
@@ -439,39 +440,30 @@ trait PagesBar
     /** Строки ведомости: смены по типам, ставка, процент с бара, штрафы. Суммы в рублях. */
     private static function barPayrollRows(array $month): array
     {
-        $gradeById = [];
-        foreach (self::gradeRows() as $g) {
-            $gradeById[$g['id']] = $g;
-        }
-        $byType = [];
-        foreach (Db::all('SELECT "employeeId", "shiftType", COUNT(*) AS n FROM shifts WHERE date >= ? AND date < ? GROUP BY "employeeId", "shiftType"', [$month['from'], add_days($month['to'], 1)]) as $r) {
-            $byType[(int) $r['employeeId']][(string) $r['shiftType']] = (int) $r['n'];
-        }
-        $fines = self::finesTotals($month['from'], $month['to']);
-        $bar = Langame::totalsByEmployee($month['from'], $month['to']);
-
         $rows = [];
         foreach (self::employees() as $e) {
-            $id = (int) $e['id'];
-            $t = $byType[$id] ?? [];
-            $day = $t['day'] ?? 0;
-            $night = $t['night'] ?? 0;
-            $full = $t['full'] ?? 0;
-            $units = $day + $night + $full * 2;
-            $fine = $fines[$id] ?? 0;
-            $barRev = (int) round(($bar[$id]['revenue'] ?? 0) / 100);
-            $barEarn = (int) round(($bar[$id]['earn'] ?? 0) / 100);
-            if (!boolish($e['isActive']) && $units === 0 && $fine === 0 && $barRev === 0) {
+            $data = Payroll::employee((int) $e['id'], $month['key']);
+            if (!$data) {
                 continue;
             }
-            $g = $e['gradeId'] !== null ? ($gradeById[(int) $e['gradeId']] ?? null) : null;
-            $rate = $g ? (int) $g['shiftRate'] : 0;
-            $gross = $units * $rate;
+            [$first, $second] = [$data['periods'][1], $data['periods'][2]];
+            $types = ['day' => 0, 'night' => 0, 'full' => 0];
+            foreach (array_merge($first['shifts'], $second['shifts']) as $shift) {
+                if ($shift['started']) {
+                    $types[$shift['shiftType']]++;
+                }
+            }
+            $units = $first['units'] + $second['units'];
+            $fine = $first['fines'] + $second['fines'];
+            if (!boolish($e['isActive']) && $units === 0 && $fine === 0 && $second['barRev'] === 0) {
+                continue;
+            }
             $rows[] = [
-                'id' => $id, 'name' => (string) $e['name'], 'active' => boolish($e['isActive']), 'grade' => $g['title'] ?? '',
-                'day' => $day, 'night' => $night, 'full' => $full, 'units' => $units, 'rate' => $rate, 'gross' => $gross,
-                'barRev' => $barRev, 'barPct' => (int) ($bar[$id]['percentX10'] ?? 0), 'bar' => $barEarn, 'fines' => $fine,
-                'total' => $gross + $barEarn - $fine,
+                'id' => (int) $e['id'], 'name' => (string) $e['name'], 'active' => boolish($e['isActive']), 'grade' => $data['employee']['gradeTitle'] ?? '',
+                'day' => $types['day'], 'night' => $types['night'], 'full' => $types['full'], 'units' => $units,
+                'rate' => (int) ($data['employee']['shiftRate'] ?? 0), 'gross' => $first['gross'] + $second['gross'],
+                'barRev' => $second['barRev'], 'barPct' => $second['barPct'], 'bar' => $second['bar'], 'fines' => $fine,
+                'total' => $first['total'] + $second['total'],
             ];
         }
         usort($rows, static fn ($a, $b) => [$b['active'], $b['total']] <=> [$a['active'], $a['total']]);
@@ -490,7 +482,7 @@ trait PagesBar
         $period = format_day_month($month['from']) . ' — ' . format_day_month($month['to']);
 
         $html = '<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">';
-        $html .= stat_tile('Фонд за месяц', h(money_rub($sum['total'])), $month['isCurrent'] ? 'месяц ещё идёт' : 'итог', '', 'wallet');
+        $html .= stat_tile('Начавшиеся смены', (string) $sum['units'], 'без будущих выходов · сутки за две', '', 'calendar');
         $html .= stat_tile('По ставкам', h(money_rub($sum['gross'])), h(plural($sum['units'], 'смена', 'смены', 'смен')) . ' · сутки за две', '', 'calendar');
         $html .= stat_tile('% с бара', h(money_rub($sum['bar'])), 'с продаж на ' . h(money_rub($sum['barRev'])), '', 'coins');
         $html .= stat_tile('Штрафы', h(money_rub($sum['fines'])), '', url_to('/fines'), 'scale', $sum['fines'] > 0);
@@ -531,7 +523,7 @@ trait PagesBar
         $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['gross'])) . '</td><td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['barRev'])) . '</td>';
         $t .= '<td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['bar'])) . '</td><td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">' . h(money_rub($sum['fines'])) . '</td>';
         $t .= '<td class="px-4 py-3 text-right font-display whitespace-nowrap tabular-nums">' . h(money_rub($sum['total'])) . '</td></tr></tfoot></table></div>';
-        $t .= '<p class="mt-4 text-xs leading-relaxed text-muted-foreground">Смены берутся из графика, сутки считаются за две. Процент с бара — по продажам в Langame, привязанным к сотруднику. Штрафы — выписанные за этот месяц.</p>';
+        $t .= '<p class="mt-4 text-xs leading-relaxed text-muted-foreground">Начисляются только начавшиеся смены, сутки считаются за две. Для прошедших смен используется история ставок; столбец «Ставка» показывает текущую. Процент с бара — с продаж за 16–конец месяца, без отмен. Штрафы — выписанные за этот месяц.</p>';
 
         return $html . card($head . $t, 'p-5');
     }
@@ -578,8 +570,9 @@ trait PagesBar
 
             $c .= form_open('save_langame', 'class="mt-5 flex flex-col gap-4" autocomplete="off"') . hidden('branchId', $b['id']);
             $c .= ui_field('Адрес клуба в Langame', '<input name="baseUrl" type="url" inputmode="url" class="' . field_class() . '" maxlength="255" placeholder="' . h(Langame::BASE_EXAMPLE) . '" value="' . h((string) ($s['baseUrl'] ?? '')) . '">', 'Номер клуба в адресе — как в ссылке на вашу админку Langame');
-            $tokenHint = $hasToken ? 'Сохранён токен ' . h((string) ($s['tokenHint'] ?? '')) . '. Оставьте поле пустым, чтобы не менять.' : 'Серверный ключ (X-Request-Token) из настроек Langame.';
+            $tokenHint = $hasToken ? 'Сохранён токен ' . h((string) ($s['tokenHint'] ?? '')) . '. Оставьте п��ле пустым, чтобы не менять.' : 'Серверный ключ (X-Request-Token) из настроек Langame.';
             $c .= ui_field('Секретный токен', '<input name="token" type="password" class="' . field_class('font-mono') . '" maxlength="512" autocomplete="new-password" spellcheck="false" placeholder="' . ($hasToken ? '••••••••••••' : 'Вставьте токен') . '">', $tokenHint);
+            $c .= ui_field('Количество компьютеров', '<input name="pcCount" type="number" min="0" max="500" class="' . field_class('max-w-40') . '" value="' . (int) $b['pcCount'] . '" required>', 'Для чистки и расчёта загрузки. 0 — количество пока не указано; консоли не включать.');
             $c .= '<div class="flex flex-wrap items-end gap-4">';
             $c .= ui_field('Процент с бара по умолчанию', '<div class="relative"><input name="barPercent" type="number" inputmode="decimal" min="0" max="100" step="0.1" class="' . field_class('pr-8 tabular-nums') . '" value="' . h(rtrim(rtrim(number_format(((int) ($s['barPercentX10'] ?? 0)) / 10, 1, '.', ''), '0'), '.')) . '"><span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">%</span></div>', '', 'w-44');
             $c .= '<label class="flex cursor-pointer items-center gap-2 pb-2.5 text-sm font-medium"><input type="checkbox" name="isEnabled" value="1" class="' . check_class() . '"' . ($on || !$s ? ' checked' : '') . '>Подтягивать продажи</label></div>';
@@ -642,7 +635,7 @@ trait PagesBar
                 $m .= '<p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Действующие · ' . count($main) . '</p>';
                 $m .= $main ? '<ul class="flex flex-col divide-y divide-border">' . implode('', array_map($renderRow, $main)) . '</ul>' : '<p class="text-sm text-muted-foreground">Не нашли действующих — раскройте список ниже.</p>';
                 if ($rest) {
-                    $m .= '<details class="group rounded-lg border border-border" data-filter-details><summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden"><span>Неактивные, удалённые и служебные · ' . count($rest) . '</span><span class="text-muted-foreground transition-transform group-open:rotate-180">' . icon('chevrondown', 'size-4') . '</span></summary>';
+                    $m .= '<details class="group rounded-lg border border-border" data-filter-details><summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden"><span>Неактивные, удалё��ные и служебные · ' . count($rest) . '</span><span class="text-muted-foreground transition-transform group-open:rotate-180">' . icon('chevrondown', 'size-4') . '</span></summary>';
                     $m .= '<ul class="flex max-h-[28rem] flex-col divide-y divide-border overflow-y-auto border-t border-border px-4 py-3 scrollbar-thin">' . implode('', array_map($renderRow, $rest)) . '</ul></details>';
                 }
                 $m .= '</div><button class="' . btn_class() . ' sm:self-start">' . icon('save', 'size-4') . 'Сохранить привязки</button></form>';

@@ -23,6 +23,11 @@ trait ActionsBar
             flash_set('error', 'Адрес должен быть вида ' . Langame::BASE_EXAMPLE);
             redirect_to($back);
         }
+        $pcCount = filter_var($_POST['pcCount'] ?? $b['pcCount'], FILTER_VALIDATE_INT);
+        if ($pcCount === false || $pcCount < 0 || $pcCount > 500) {
+            flash_set('error', 'Количество компьютеров — целое число от 0 до 500');
+            redirect_to($back);
+        }
         $pctRaw = str_replace(',', '.', self::postStr('barPercent', 8));
         $pct = $pctRaw === '' ? 0 : (int) round(((float) $pctRaw) * 10);
         if ($pct < 0 || $pct > 1000) {
@@ -53,6 +58,7 @@ trait ActionsBar
         } else {
             Db::insert('langame_settings', ['branchId' => $b['id']] + $row);
         }
+        Db::exec('UPDATE branches SET "pcCount" = ? WHERE id = ?', [$pcCount, $b['id']]);
         audit($user, 'content', 'langame', 'Настройки Langame: ' . $b['name'] . ($token !== '' ? ' (новый токен)' : ''), url_to($back));
         if ($enabled && $token !== '') {
             try {

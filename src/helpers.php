@@ -52,6 +52,17 @@ const DEFAULT_TARIFFS = [
                 ['label' => 'Ночь 12 часов', 'hint' => '22:00–10:00', 'prices' => [600, 750, 800]],
             ],
         ],
+        [
+            'branchName' => 'Газовиков',
+            'address' => 'ул. Газовиков, 38',
+            'zones' => ['Standart', 'VIP', 'Duo', 'PS5'],
+            'packages' => [
+                ['label' => '1 час', 'prices' => [140, 170, 230, 300]],
+                ['label' => '3 часа', 'prices' => [350, 450, 600, 800]],
+                ['label' => '5 часов', 'prices' => [600, 720, 900, 1200]],
+                ['label' => 'Ночь 12 часов', 'hint' => '22:00–10:00', 'prices' => [700, 850, 1200, 1500]],
+            ],
+        ],
     ],
 ];
 
@@ -70,6 +81,7 @@ const NAV_GROUPS = [
         ['href' => '/', 'label' => 'Мой день', 'icon' => 'home'],
         ['href' => '/shift', 'label' => 'Приём и сдача', 'icon' => 'clipboard-check'],
         ['href' => '/schedule', 'label' => 'График смен', 'icon' => 'calendar'],
+        ['href' => '/salary', 'label' => 'Моя зарплата', 'icon' => 'wallet'],
         ['href' => '/bar', 'label' => 'Продажи и аналитика', 'icon' => 'coins'],
         ['href' => '/cleaning', 'label' => 'Чистка клавиатур', 'icon' => 'keyboard'],
         ['href' => '/manage/tasks', 'label' => 'Задания на смены', 'icon' => 'clipboard-list', 'perm' => 'tasks.assign'],
@@ -103,7 +115,7 @@ const NAV_GROUPS = [
 const MOBILE_TABS = [
     ['href' => '/', 'label' => 'Мой день', 'icon' => 'home'],
     ['href' => '/schedule', 'label' => 'График', 'icon' => 'calendar'],
-    ['href' => '/issues', 'label' => 'Поломки', 'icon' => 'wrench', 'badge' => 'issues'],
+    ['href' => '/salary', 'label' => 'Зарплата', 'icon' => 'wallet'],
     ['href' => '/reviews', 'label' => 'Отзывы', 'icon' => 'star', 'badge' => 'reviews'],
 ];
 

@@ -37,7 +37,7 @@ trait PagesGuests
     private static function decideForm(string $action, int $id): string
     {
         return form_open($action, 'class="flex flex-wrap gap-1.5"') . hidden('id', $id)
-            . '<button name="decision" value="credited" class="' . btn_class('ink', 'xs') . '">' . icon('check', 'size-3.5') . 'Зачислено</button>'
+            . '<button name="decision" value="credited" class="' . btn_class('ink', 'xs') . '" ' . confirm_attr('Вы уже начислили бонусы в Langame? Эта кнопка только отмечает выполнение в CRM и не меняет баланс гостя.') . '>' . icon('check', 'size-3.5') . 'Отметить зачисление</button>'
             . '<button name="decision" value="rejected" class="' . btn_class('danger', 'xs') . '" ' . confirm_attr('Отказать в бонусах?') . '>Отказ</button></form>';
     }
 
@@ -59,10 +59,11 @@ trait PagesGuests
         }
         $actions = can($user, 'content.edit') ? '<a class="' . btn_class('outline') . '" href="' . h(url_to('/reviews/edit')) . '">' . icon('sliders', 'size-4') . 'Условия акции</a>' : '';
         $html = page_head('Бонусы за отзывы', h((string) $promo['intro']), $actions);
+        $html .= '<p class="text-sm leading-relaxed text-muted-foreground">Начисление выполняется вручную в Langame на бонусный баланс. Кнопка «Отметить зачисление» фиксирует результат в CRM: в публичном API нет документированного метода пополнения.</p>';
         $html .= '<div class="grid items-start gap-6 lg:grid-cols-[21rem_minmax(0,1fr)]">';
 
         $form = form_open('save_review', 'class="flex flex-col gap-4" data-review-form data-submit-once');
-        $form .= '<div class="flex items-start justify-between gap-3"><h2 class="font-display text-base font-semibold">Новая заявка</h2><span class="font-display text-2xl leading-none font-semibold text-primary-ink tabular-nums">+' . (int) $promo['textBonus'] . '</span></div>';
+        $form .= '<div class="flex items-start justify-between gap-3"><h2 class="font-display text-base font-semibold">Новая заявка</h2><span class="font-display text-2xl leading-none font-semibold text-primary-ink tabular-nums">+' . (int) $promo['textBonus'] . '<span class="block font-sans text-sm font-medium">бонусов</span></span></div>';
         $form .= ui_field('Филиал', ui_select('branchId', self::branchOptions(), $user['homeBranchId'] ?? null, 'required data-review-branch'));
         $form .= ui_field('Телефон гостя', '<input name="guestPhone" class="' . field_class('font-mono') . '" required inputmode="tel" autocomplete="off" placeholder="+7 900 000-00-00" data-review-phone>');
         $form .= '<p class="-mt-2 min-h-5 text-xs leading-relaxed text-muted-foreground" data-phone-hint aria-live="polite">Бонус даётся один раз на филиал — номер проверится сам.</p>';
@@ -77,14 +78,14 @@ trait PagesGuests
             $html .= empty_state('star', 'Заявок нет', 'Когда гость оставит отзыв, добавьте его номер в форме слева.');
         } else {
             $canAny = can($user, 'guests.decide');
-            $html .= table_open(['Когда', 'Филиал', 'Телефон', 'Сумма', 'Статус', 'Добавил(а)'] + ($canAny ? [6 => ['', 'w-0']] : []), 'id="reviews-table"');
+            $html .= table_open(['Когда', 'Филиал', 'Телефон', 'Бонусов', 'Статус', 'Добавил(а)'] + ($canAny ? [6 => ['', 'w-0']] : []), 'id="reviews-table"');
             foreach ($rows as $r) {
                 $digits = normalize_phone((string) $r['guestPhone']) ?? '';
                 $html .= '<tr class="border-t border-border" data-filter-text="' . h($digits . ' ' . $r['guestPhone']) . '">';
                 $html .= td('Когда', '<span class="whitespace-nowrap">' . h(format_dt((string) $r['createdAt'])) . '</span>', 'text-muted-foreground');
                 $html .= td('Филиал', h($r['branchName']));
                 $html .= td('Телефон', self::phoneCell((string) $r['guestPhone']));
-                $html .= td('Сумма', '<span class="font-semibold tabular-nums">' . num_fmt((int) $r['bonusAmount']) . '</span>');
+                $html .= td('Бонусов', '<span class="font-semibold tabular-nums">' . num_fmt((int) $r['bonusAmount']) . '</span>');
                 $html .= td('Статус', status_chip((string) $r['status']) . ($r['status'] !== 'pending' && !empty($r['decidedByName']) ? '<span class="mt-1 block text-xs text-muted-foreground">' . h(short_name((string) $r['decidedByName'])) . '</span>' : ''));
                 $html .= td('Добавил(а)', h(short_name((string) $r['createdByName'])), 'text-muted-foreground');
                 if ($canAny) {
@@ -106,7 +107,7 @@ trait PagesGuests
         $html .= page_head('Условия акции за отзывы', 'Текст видят все сотрудники над формой заявки. Сумма подставляется в каждую новую заявку.');
         $form = form_open('save_promo', 'class="flex flex-col gap-5"');
         $form .= ui_field('Условия для сотрудников', '<textarea name="intro" class="' . textarea_class('min-h-32') . '" maxlength="2000" required>' . h((string) $promo['intro']) . '</textarea>');
-        $form .= ui_field('Бонус за отзыв', '<input name="textBonus" type="number" min="1" max="100000" class="' . field_class('max-w-40') . '" value="' . (int) $promo['textBonus'] . '" required>', 'В бонусных рублях, целое число');
+        $form .= ui_field('Бонус за отзыв', '<input name="textBonus" type="number" min="1" max="100000" class="' . field_class('max-w-40') . '" value="' . (int) $promo['textBonus'] . '" required>', 'Количество бонусов, не рублей. За отзыв — 100 бонусов.');
         $form .= '<div class="flex justify-end gap-2"><a class="' . btn_class('ghost') . '" href="' . h(url_to('/reviews')) . '">Отмена</a><button class="' . btn_class() . '">' . icon('save', 'size-4') . 'Сохранить</button></div></form>';
         $html .= card($form, 'p-5 sm:p-6');
         self::layout($user, $html, ['title' => 'Условия акции', 'width' => 'narrow']);
@@ -117,7 +118,7 @@ trait PagesGuests
     private static function pageCompensations(array $user): void
     {
         [$rows, $status, $tabs, $branchNav] = self::guestRows('compensations', '/compensations');
-        $html = page_head('Компенсации гостям', 'Если у гостя что-то пошло не так по вине клуба — запишите, что случилось и что вы сделали. Бонусы зачисляет ответственный.');
+        $html = page_head('Компенсации гостям', 'Если у гостя что-то пошло не так по вине клуба — запишите, что случилось и что вы сделали. Бонусы зачисляет ответственный вручную в Langame. CRM фиксирует результат, но не меняет баланс через API.');
         $html .= '<div class="grid items-start gap-6 lg:grid-cols-[21rem_minmax(0,1fr)]">';
 
         $form = form_open('save_comp', 'class="flex flex-col gap-4" data-submit-once');
@@ -205,7 +206,7 @@ trait PagesGuests
         $branchesT = $tariffs['branches'] ?? [];
         $time .= '<div class="mt-5 flex flex-col gap-4" data-time-calc>';
         if (count($branchesT) > 1) {
-            $time .= '<div class="flex gap-1 self-start rounded-lg border border-border bg-muted/40 p-1" role="tablist">';
+            $time .= '<div class="flex flex-wrap gap-1 self-start rounded-lg border border-border bg-muted/40 p-1" role="tablist">';
             foreach ($branchesT as $i => $b) {
                 $time .= '<button type="button" role="tab" class="seg-btn" aria-selected="' . ($i === 0 ? 'true' : 'false') . '" data-branch-tab="' . $i . '">' . h((string) $b['branchName']) . '</button>';
             }

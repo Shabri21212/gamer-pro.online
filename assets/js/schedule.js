@@ -229,7 +229,8 @@
       item.setAttribute("data-type", p.t);
       item.setAttribute("data-weight", p.t === "full" ? "2" : "1");
       item.innerHTML =
-        '<span class="cal-chip is-pending" data-tone="' + p.t + '">' + typeIcon(p.t) + '<span class="cal-chip-name"><span class="cal-name-short"></span><span class="cal-name-full"></span></span></span>';
+        '<span class="cal-chip is-pending" data-tone="' + p.t + '">' + typeIcon(p.t) + '<span class="cal-chip-name"><span class="cal-chip-label"></span><span class="cal-name-short" aria-hidden="true"></span><span class="cal-name-full"></span></span></span>';
+      one('.cal-chip-label', item).textContent = p.hint;
       one(".cal-name-short", item).textContent = p.short;
       one(".cal-name-full", item).textContent = p.name;
       one(".cal-chip", item).title = p.name + " · " + p.hint + " · не сохранено";

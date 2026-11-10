@@ -6,8 +6,11 @@ foreach (['shifts', 'handover', 'club', 'guests', 'rules', 'exams', 'manage', 'b
     require __DIR__ . '/actions/' . $part . '.php';
 }
 
+require_once __DIR__ . '/pages/salary.php';
+
 final class Portal
 {
+    use PagesSalary;
     use PagesShifts, PagesHandover, PagesClub, PagesGuests, PagesRules, PagesExams, PagesManage, PagesBar;
     use ActionsShifts, ActionsHandover, ActionsClub, ActionsGuests, ActionsRules, ActionsExams, ActionsManage, ActionsBar;
 
@@ -32,6 +35,7 @@ final class Portal
         '/wiki/new' => ['pageWikiNew', 'wiki.edit'],
         '/exams' => ['pageExams', null],
         '/account' => ['pageAccount', null],
+        '/salary' => ['pageSalary', null],
         '/manage/journal' => ['pageJournal', 'journal.view'],
         '/manage/employees' => ['pageEmployees', 'staff.manage'],
         '/manage/grades' => ['pageGrades', 'staff.manage'],

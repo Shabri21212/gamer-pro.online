@@ -31,6 +31,10 @@ trait PagesShifts
         }
         $live = self::liveShifts();
         $soon = self::soonByBranch();
+        if (!can($user, 'schedule.view_all')) {
+            $live = array_values(array_filter($live, static fn ($s) => can_view_schedule($user, (int) $s['branchId']) || (int) $s['employeeId'] === (int) $eid));
+            $soon = array_filter($soon, static fn ($bid) => can_view_schedule($user, (int) $bid), ARRAY_FILTER_USE_KEY);
+        }
         $handover = self::handoverShift($user);
         $handoverPhase = $handover
             ? self::handoverNextPhase($handover, self::handoverReports((int) $handover['branchId'], (string) $handover['date'], (string) $handover['shiftType']))
@@ -60,12 +64,13 @@ trait PagesShifts
             $rest = array_values(array_filter($upcoming, static fn ($s) => !$hero || $s['id'] !== $hero['id']));
             $html .= self::upcomingCard(array_slice($rest, 0, 6));
         } else {
-            $html .= self::clubsNowHero($live, $soon);
+            $html .= self::clubsNowHero($live, $soon, $user);
         }
         $html .= '</div><div class="flex min-w-0 flex-col gap-6">';
+        $html .= self::personalPayCard($user);
         $html .= self::attentionCard($user, $attention);
         if ($eid) {
-            $html .= self::clubsNowCard($live, $soon);
+            $html .= self::clubsNowCard($live, $soon, $user);
         }
         $html .= self::latestNewsCard($user);
         $html .= '</div></div>';
@@ -225,11 +230,14 @@ trait PagesShifts
         return card($html . '</ul>', 'p-5');
     }
 
-    private static function clubBranchRows(array $live, array $soon, bool $dark): string
+    private static function clubBranchRows(array $live, array $soon, bool $dark, array $user): string
     {
         $muted = $dark ? 'text-sidebar-muted' : 'text-muted-foreground';
         $html = '';
         foreach (self::branches() as $b) {
+            if (!can_view_schedule($user, $b['id'])) {
+                continue;
+            }
             $people = array_values(array_filter($live, static fn ($r) => (int) $r['branchId'] === $b['id']));
             $html .= '<div class="flex min-w-0 flex-col gap-2.5">';
             $html .= '<div class="flex items-baseline justify-between gap-2"><p class="font-semibold">' . h($b['name']) . '</p><span class="text-xs ' . $muted . '">' . ($people ? h(plural(count($people), 'человек', 'человека', 'человек')) : 'никого') . '</span></div>';
@@ -332,19 +340,19 @@ trait PagesShifts
         return $m >= 60 ? intdiv($m, 60) . ' ч ' . str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT) . ' м' : $m . ' мин';
     }
 
-    private static function clubsNowCard(array $live, array $soon): string
+    private static function clubsNowCard(array $live, array $soon, array $user): string
     {
         $html = card_head('Сейчас в клубах', '', '', 'building');
-        $html .= '<div class="mt-4 flex flex-col gap-5 divide-border">' . self::clubBranchRows($live, $soon, false) . '</div>';
+        $html .= '<div class="mt-4 flex flex-col gap-5 divide-border">' . self::clubBranchRows($live, $soon, false, $user) . '</div>';
         return card($html, 'p-5');
     }
 
-    private static function clubsNowHero(array $live, array $soon): string
+    private static function clubsNowHero(array $live, array $soon, array $user): string
     {
         $html = '<section class="cut hero-panel flex flex-col gap-6 p-5  sm:p-7" style="--cut:26px" aria-labelledby="clubs-now">';
         $html .= '<div class="flex flex-wrap items-center justify-between gap-3"><p id="clubs-now" class="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-sidebar-muted uppercase"><span class="cut-mark" aria-hidden="true"></span>Сейчас в клубах</p>';
         $html .= '<span class="inline-flex items-center gap-2 rounded-[5px] bg-sidebar-accent px-2 py-0.5 text-xs leading-5 font-semibold"><span class="live-dot" aria-hidden="true"></span>' . h(plural(count($live), 'человек', 'человека', 'человек')) . ' на смене</span></div>';
-        $html .= '<div class="grid gap-6 sm:grid-cols-2">' . self::clubBranchRows($live, $soon, true) . '</div>';
+        $html .= '<div class="grid gap-6 sm:grid-cols-2">' . self::clubBranchRows($live, $soon, true, $user) . '</div>';
         $html .= '<a href="' . h(url_to('/schedule')) . '" class="inline-flex w-fit items-center gap-1.5 text-sm font-semibold hover:text-brand">График смен ' . icon('arrow', 'size-4') . '</a>';
         return $html . '</section>';
     }
@@ -413,6 +421,12 @@ trait PagesShifts
     private static function pageSchedule(array $user): void
     {
         $branch = self::pickBranch($user);
+        $seeAll = can($user, 'schedule.view_all');
+        if (!$seeAll && (!$branch || !can_view_schedule($user, (int) $branch['id']))) {
+            http_response_code(403);
+            self::layout($user, empty_state('lock', 'График этого филиала недоступен', 'Доступен график вашего домашнего филиала. Право «Видеть графики всех филиалов» выдаёт владелец в разделе «Доступы и права».', '<a class="' . btn_class('outline') . '" href="' . h(url_to('/schedule')) . '">Мой филиал</a>'), ['title' => 'График смен']);
+            return;
+        }
         if (!$branch) {
             self::layout($user, empty_state('building', 'Филиалы ещё не добавлены'), ['title' => 'График смен']);
             return;
@@ -456,6 +470,9 @@ trait PagesShifts
              ORDER BY s.date',
             [$branch['id'], $branch['id'], $from, $to],
         );
+        if (!$seeAll) {
+            $away = array_values(array_filter($away, static fn ($s) => (int) $s['employeeId'] === $meId));
+        }
         $byDate = [];
         for ($d = 1; $d <= $last; $d++) {
             $byDate[to_date_key($year, $month, $d)] = ['day' => $d, 'shifts' => [], 'away' => []];
@@ -487,7 +504,9 @@ trait PagesShifts
         foreach (self::employees() as $e) {
             $half[(int) $e['id']] = ['name' => (string) $e['name'], 'first' => 0, 'second' => 0, 'month' => 0];
         }
-        foreach (Db::all('SELECT "employeeId", date, "shiftType" FROM shifts WHERE date >= ? AND date <= ?', [$from, $to]) as $r) {
+        $summaryScope = $seeAll ? '' : ' AND ("branchId" = ? OR "employeeId" = ?)';
+        $summaryParams = $seeAll ? [$from, $to] : [$from, $to, $branch['id'], $meId];
+        foreach (Db::all('SELECT "employeeId", date, "shiftType" FROM shifts WHERE date >= ? AND date <= ?' . $summaryScope, $summaryParams) as $r) {
             $id = (int) $r['employeeId'];
             if (!isset($half[$id])) {
                 continue;
@@ -502,7 +521,8 @@ trait PagesShifts
             $liveIds[(int) $ls['id']] = true;
         }
 
-        $html = page_head('График смен', 'День 08:00–20:00, ночь 20:00–08:00, сутки 08:00–08:00 — по времени клуба.', self::branchSwitch('/schedule', $branch, ['m' => $monthParam]));
+        $switch = $seeAll ? self::branchSwitch('/schedule', $branch, ['m' => $monthParam]) : chip($branch['name'], 'outline', 'building');
+        $html = page_head('График смен', 'Команда по дням. Нажмите на дату, чтобы посмотреть смены' . ($canEdit ? ' или изменить состав.' : '.') . ' Время — Тюмень.', $switch);
 
         $monthHref = static fn (?string $m): string => h(url_to('/schedule', ['branch' => $branch['slug'], 'm' => $m]));
         $html .= '<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3"><div class="flex items-center gap-1.5">';
@@ -537,14 +557,9 @@ trait PagesShifts
             $html .= '</div>';
         }
 
-        $lead = monday_first_weekday($year, $month, 1);
-        $trail = (7 - ($lead + $last) % 7) % 7;
         $html .= '<section class="cal" aria-label="' . h('Смены · ' . format_month_title($year, $month) . ' · ' . $branch['name']) . '" data-month-grid data-year="' . $year . '" data-month="' . $month . '" data-last="' . $last . '" data-can-edit="' . ($canEdit ? '1' : '0') . '">';
-        $html .= '<div class="cal-head" aria-hidden="true">';
-        foreach (WEEKDAY_SHORT as $lab) {
-            $html .= '<div>' . $lab . '</div>';
-        }
-        $html .= '</div><div class="cal-grid">' . str_repeat('<div class="cal-pad" aria-hidden="true"></div>', $lead);
+        $html .= '<div class="cal-head" aria-hidden="true"><div>Дата</div><div>' . icon('sun') . 'День <span>08:00–20:00</span></div><div>' . icon('moon') . 'Ночь <span>20:00–08:00</span></div></div>';
+        $html .= '<div class="cal-grid">';
         foreach ($byDate as $key => $cell) {
             $wd = weekday_from_date_key($key);
             $count = count($cell['shifts']);
@@ -576,7 +591,7 @@ trait PagesShifts
             $html .= '<div class="cal-date"><span class="cal-num">' . $cell['day'] . '</span><span class="cal-wd">' . h(mb_strtolower(WEEKDAY_SHORT[$wd])) . '</span></div>';
             $html .= '<div class="cal-shifts">' . $items . '</div></div>';
         }
-        $html .= str_repeat('<div class="cal-pad" aria-hidden="true"></div>', $trail) . '</div>';
+        $html .= '</div>';
         $html .= '<div class="cal-legend" aria-label="Обозначения">';
         foreach (['day' => 'День', 'night' => 'Ночь', 'full' => 'Сутки'] as $tone => $lab) {
             $html .= '<span class="cal-legend-item"><span class="cal-key" data-tone="' . $tone . '" aria-hidden="true"></span>' . $lab . '</span>';
@@ -592,7 +607,7 @@ trait PagesShifts
             $total = ['first' => 0, 'second' => 0, 'month' => 0];
             $html .= '<section class="overflow-hidden rounded-xl border border-border bg-card shadow-xs" aria-labelledby="sum-title" data-summary>';
             $html .= '<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-5"><div class="flex min-w-0 flex-col gap-0.5"><h3 id="sum-title" class="text-sm font-semibold">Смены за ' . h(mb_strtolower(MONTH_NAMES[$month])) . '</h3>';
-            $html .= '<p class="text-xs leading-relaxed text-pretty text-muted-foreground">Сутки считаются за две смены. В счёт идут и выходы в другом филиале.</p></div>';
+            $html .= '<p class="text-sm leading-relaxed text-pretty text-muted-foreground">Сутки — две смены. ' . ($seeAll ? 'Учтены выходы во всех филиалах.' : 'Учтены смены этого филиала и ваши подмены.') . '</p></div>';
             $html .= '<p class="hidden text-xs text-muted-foreground lg:block" data-range-hint>Протяните мышью по дням, чтобы посчитать смены за период</p>';
             $html .= '<div class="flex items-center gap-2 text-sm" data-range-info hidden><span class="text-muted-foreground">Период</span><span class="font-semibold" data-range-label></span><button type="button" class="' . btn_class('outline', 'xs') . '" data-range-clear>Сбросить</button></div></div>';
             $html .= '<div class="overflow-x-auto border-t border-border"><table class="w-full text-sm"><thead class="bg-muted/50 text-muted-foreground"><tr><th scope="col" class="px-4 py-2 text-left text-xs font-semibold tracking-wide uppercase sm:px-5">Сотрудник</th>';
@@ -602,7 +617,7 @@ trait PagesShifts
                 foreach ($total as $k => $v) {
                     $total[$k] = $v + (int) $r[$k];
                 }
-                $html .= '<tr class="sum-row border-t border-border' . ($id === $meId ? ' is-mine' : '') . '" data-sum-emp="' . $id . '"><th scope="row" class="px-4 py-2.5 text-left font-medium sm:px-5"><span class="flex items-center gap-2"><span class="min-w-0 truncate">' . h((string) $r['name']) . '</span>' . ($id === $meId ? chip('вы', 'red') : '') . '</span></th>';
+                $html .= '<tr class="sum-row border-t border-border' . ($id === $meId ? ' is-mine' : '') . '" data-sum-emp="' . $id . '"><th scope="row" class="px-4 py-2.5 text-left font-medium sm:px-5"><span class="flex items-center gap-2"><span class="min-w-0 break-words">' . h((string) $r['name']) . '</span>' . ($id === $meId ? chip('вы', 'red') : '') . '</span></th>';
                 $html .= '<td class="' . $tdc . '">' . $num((int) $r['first']) . '</td><td class="' . $tdc . '">' . $num((int) $r['second']) . '</td><td class="' . $tdc . ' font-semibold">' . $num((int) $r['month']) . '</td>';
                 $html .= '<td class="' . $tdc . ' font-semibold text-primary-ink" data-range-cell hidden>0</td></tr>';
             }
@@ -705,7 +720,12 @@ trait PagesShifts
         $thisWeek = monday_key($now);
         $w = self::getStr('w', 10);
         $week = is_date_key($w) ? monday_key(date_from_key($w)) : $thisWeek;
-        $pc = max(1, (int) $branch['pcCount']);
+        $pc = (int) $branch['pcCount'];
+        if ($pc < 1) {
+            $action = $user['isOwner'] ? '<a class="' . btn_class('outline') . '" href="' . h(url_to('/manage/langame')) . '">Настроить филиал</a>' : '';
+            self::layout($user, page_head('Чистка клавиатур', '', self::branchSwitch('/cleaning', $branch)) . empty_state('keyboard', 'Укажите количество ПК', 'Для филиала «' . $branch['name'] . '» количество компьютеров пока не задано. Владелец может указать его в настройках Langame.', $action), ['title' => 'Чистка клавиатур']);
+            return;
+        }
         $canAssign = can($user, 'cleaning.assign', $branch['id']);
         $meId = (int) ($user['employeeId'] ?? 0);
         $done = [];
