@@ -14,24 +14,135 @@ trait PagesGuests
         return tabs_nav($tabs, $status, 'Статус');
     }
 
-    /** Строки журнала гостей с фильтрами ?status= и ?branch=. */
-    private static function guestRows(string $table, string $path): array
+    /** Колонки журнала, по которым ищется текст (номер телефона ищется всегда). Заодно это список допустимых таблиц. */
+    private static function guestTextCols(string $table): array
+    {
+        return match ($table) {
+            'review_bonuses' => ['note'],
+            'compensations' => ['reason', 'actionsTaken'],
+        };
+    }
+
+    /**
+     * Одна страница журнала гостей с учётом филиала, статуса и поиска.
+     * Без поиска страница берётся из базы через LIMIT/OFFSET. С поиском строки отбирает guest_row_matches() в PHP:
+     * регистр кириллицы SQLite и MySQL сравнивают по-разному, а журнал — это сотни строк, а не миллионы.
+     * Счётчики по статусам считаются с теми же филиалом и поиском: вкладки показывают, где лежит найденное.
+     *
+     * @return array{rows: list<array<string, mixed>>, counts: array<string, int>, total: int, page: int, pages: int}
+     */
+    private static function guestJournal(string $table, ?int $branchId, string $status, string $search, int $page, int $perPage = GUEST_PAGE_SIZE): array
+    {
+        $textCols = self::guestTextCols($table);
+        $perPage = max(1, $perPage);
+        $scope = $branchId !== null ? ' WHERE t."branchId" = ?' : '';
+        $params = $branchId !== null ? [$branchId] : [];
+        // id в сортировке обязателен: у перенесённых строк время совпадает, и без него они «прыгали» бы между страницами.
+        $order = ' ORDER BY t."createdAt" DESC, t.id DESC';
+        $select = 'SELECT t.*, b.name AS "branchName" FROM ' . $table . ' t LEFT JOIN branches b ON b.id = t."branchId"';
+        $needle = guest_search_needle($search);
+        $counts = [];
+        $found = null;
+
+        if ($needle['text'] === '') {
+            foreach (Db::all('SELECT t.status, COUNT(*) AS n FROM ' . $table . ' t' . $scope . ' GROUP BY t.status', $params) as $r) {
+                $counts[(string) $r['status']] = (int) $r['n'];
+            }
+            $total = $status === 'all' ? array_sum($counts) : ($counts[$status] ?? 0);
+        } else {
+            $cols = 't.id, t.status, t."guestPhone"';
+            foreach ($textCols as $col) {
+                $cols .= ', t."' . $col . '"';
+            }
+            $found = [];
+            foreach (Db::all('SELECT ' . $cols . ' FROM ' . $table . ' t' . $scope . $order, $params) as $r) {
+                if (!guest_row_matches($r, $needle, $textCols)) {
+                    continue;
+                }
+                $rowStatus = (string) $r['status'];
+                $counts[$rowStatus] = ($counts[$rowStatus] ?? 0) + 1;
+                if ($status === 'all' || $rowStatus === $status) {
+                    $found[] = (int) $r['id'];
+                }
+            }
+            $total = count($found);
+        }
+
+        $pages = max(1, (int) ceil($total / $perPage));
+        $page = max(1, min($page, $pages));
+        $offset = ($page - 1) * $perPage;
+        if ($total === 0) {
+            $rows = [];
+        } elseif ($found !== null) {
+            $rows = Db::all($select . ' WHERE t.id IN (' . implode(',', array_slice($found, $offset, $perPage)) . ')' . $order);
+        } else {
+            if ($status !== 'all') {
+                $scope .= ($scope === '' ? ' WHERE ' : ' AND ') . 't.status = ?';
+                $params[] = $status;
+            }
+            $rows = Db::all($select . $scope . $order . ' LIMIT ' . $perPage . ' OFFSET ' . $offset, $params);
+        }
+        return ['rows' => $rows, 'counts' => $counts, 'total' => $total, 'page' => $page, 'pages' => $pages];
+    }
+
+    /**
+     * Журнал гостей для страницы: читает ?status=, ?branch=, ?q= и ?page=, собирает вкладки, поиск и листание.
+     * Поиск и листание ведут на #journal: на телефоне журнал стоит под формой, и без якоря
+     * после каждого перехода страницу пришлось бы прокручивать заново.
+     *
+     * @return array{rows: list<array<string, mixed>>, search: string, tabs: string, branchNav: string, searchForm: string, pager: string}
+     */
+    private static function guestJournalView(string $table, string $path, string $placeholder): array
     {
         $status = self::getStr('status', 16);
         $status = in_array($status, ['pending', 'credited', 'rejected'], true) ? $status : 'all';
-        [$branch, $branchNav] = self::branchFilter($path, $status !== 'all' ? ['status' => $status] : []);
-        $where = $branch ? ' WHERE t."branchId" = ' . (int) $branch['id'] : '';
-        $cnt = [];
-        foreach (Db::all('SELECT t.status, COUNT(*) AS n FROM ' . $table . ' t' . $where . ' GROUP BY t.status') as $r) {
-            $cnt[(string) $r['status']] = (int) $r['n'];
+        $search = self::getStr('q', 64);
+        $filters = ['status' => $status !== 'all' ? $status : null, 'q' => $search];
+        [$branch, $branchNav] = self::branchFilter($path, $filters);
+        $filters['branch'] = $branch['slug'] ?? null;
+        $journal = self::guestJournal($table, $branch ? (int) $branch['id'] : null, $status, $search, (int) self::getStr('page', 6));
+
+        $form = '<form method="get" action="' . h(url_to($path) . '#journal') . '" role="search" class="flex flex-wrap items-center gap-2">';
+        foreach (['status', 'branch'] as $key) {
+            if ($filters[$key] !== null) {
+                $form .= hidden($key, $filters[$key]);
+            }
         }
-        $cond = $where;
-        if ($status !== 'all') {
-            $cond .= ($cond === '' ? ' WHERE ' : ' AND ') . 't.status = \'' . $status . '\'';
+        $form .= search_input('name="q" value="' . h($search) . '" maxlength="64" autocomplete="off" enterkeyhint="search"', $placeholder, 'min-w-0 flex-1 basis-56 sm:max-w-sm');
+        $form .= '<button class="' . btn_class('outline') . '">Найти</button>';
+        if ($search !== '') {
+            $form .= '<a class="' . btn_class('quiet') . '" href="' . h(url_to($path, ['q' => null] + $filters) . '#journal') . '">' . icon('x', 'size-4') . 'Сбросить</a>';
         }
-        $rows = Db::all('SELECT t.*, b.name AS "branchName" FROM ' . $table . ' t JOIN branches b ON b.id = t."branchId"' . $cond . ' ORDER BY t."createdAt" DESC LIMIT 300');
-        $q = $branch ? ['branch' => $branch['slug']] : [];
-        return [$rows, $status, self::guestStatusTabs($path, $status, $cnt, $q) . '', $branchNav];
+        $form .= '</form>';
+
+        return [
+            'rows' => $journal['rows'],
+            'search' => $search,
+            'tabs' => self::guestStatusTabs($path, $status, $journal['counts'], ['branch' => $filters['branch'], 'q' => $search]),
+            'branchNav' => $branchNav,
+            'searchForm' => $form,
+            'pager' => pager(
+                $journal['page'],
+                $journal['pages'],
+                $journal['total'],
+                GUEST_PAGE_SIZE,
+                static fn (int $p): string => url_to($path, $filters + ['page' => $p > 1 ? $p : null]) . '#journal',
+                'Страницы журнала',
+            ),
+        ];
+    }
+
+    /**
+     * Ячейка в две строки: значение и приглушённая подпись под ним.
+     * На телефоне строка таблицы — карточка: там обе строки прижаты вправо, а длинная подпись переносится.
+     * В таблице подпись не переносится, иначе ширина колонки менялась бы от страницы к странице.
+     */
+    private static function stackCell(string $main, string $sub): string
+    {
+        if ($sub === '') {
+            return $main;
+        }
+        return '<div class="flex min-w-0 flex-col items-end gap-1 sm:items-start">' . $main . '<span class="text-xs break-words text-muted-foreground sm:whitespace-nowrap">' . h($sub) . '</span></div>';
     }
 
     private static function decideForm(string $action, int $id): string
@@ -51,9 +162,10 @@ trait PagesGuests
     private static function pageReviews(array $user): void
     {
         $promo = self::portal_json('review_promo', DEFAULT_REVIEW_PROMO);
-        [$rows, $status, $tabs, $branchNav] = self::guestRows('review_bonuses', '/reviews');
+        $journal = self::guestJournalView('review_bonuses', '/reviews', 'Поиск по телефону или промокоду');
         $known = [];
-        foreach (Db::all('SELECT "branchId", "guestPhone", status, "createdAt" FROM review_bonuses WHERE status != \'rejected\'') as $r) {
+        // По возрастанию даты: если номер получал бонус несколько раз, в подсказке формы остаётся последний.
+        foreach (Db::all('SELECT "branchId", "guestPhone", status, "createdAt" FROM review_bonuses WHERE status != \'rejected\' ORDER BY "createdAt", id') as $r) {
             $digits = normalize_phone((string) $r['guestPhone']) ?? (string) $r['guestPhone'];
             $known[(int) $r['branchId']][$digits] = (REVIEW_STATUS[$r['status']] ?? $r['status']) . ', ' . format_dt((string) $r['createdAt'], false);
         }
@@ -71,22 +183,26 @@ trait PagesGuests
         $form .= '<button class="' . btn_class() . '">' . icon('send', 'size-4') . 'Отправить на зачисление</button></form>';
         $html .= card($form, 'p-5 lg:sticky lg:top-8');
 
-        $html .= '<div class="flex min-w-0 flex-col gap-4">';
-        $html .= '<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">' . $tabs . $branchNav . '</div>';
-        $html .= search_input('data-table-filter="reviews-table"', 'Поиск по телефону', 'max-w-sm');
-        if (!$rows) {
-            $html .= empty_state('star', 'Заявок нет', 'Когда гость оставит отзыв, добавьте его номер в форме слева.');
+        $html .= '<div id="journal" class="flex min-w-0 scroll-mt-20 flex-col gap-4">';
+        $html .= '<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">' . $journal['tabs'] . $journal['branchNav'] . '</div>';
+        $html .= $journal['searchForm'];
+        if (!$journal['rows']) {
+            $html .= $journal['search'] !== ''
+                ? empty_state('search', 'Ничего не нашлось', 'По запросу «' . $journal['search'] . '» заявок нет. Проверьте номер или загляните на другие вкладки и филиалы.')
+                : empty_state('star', 'Заявок нет', 'Когда гость оставит отзыв, добавьте его номер в форме слева.');
         } else {
             $canAny = can($user, 'guests.decide');
-            $html .= table_open(['Когда', 'Филиал', 'Телефон', 'Бонусов', 'Статус', 'Добавил(а)'] + ($canAny ? [6 => ['', 'w-0']] : []), 'id="reviews-table"');
-            foreach ($rows as $r) {
-                $digits = normalize_phone((string) $r['guestPhone']) ?? '';
-                $html .= '<tr class="border-t border-border" data-filter-text="' . h($digits . ' ' . $r['guestPhone']) . '">';
-                $html .= td('Когда', '<span class="whitespace-nowrap">' . h(format_dt((string) $r['createdAt'])) . '</span>', 'text-muted-foreground');
-                $html .= td('Филиал', h($r['branchName']));
-                $html .= td('Телефон', self::phoneCell((string) $r['guestPhone']));
+            $html .= table_open(['Когда', 'Филиал', 'Телефон', 'Бонусов', 'Статус', 'Добавил(а)'] + ($canAny ? [6 => ['', 'w-0']] : []));
+            foreach ($journal['rows'] as $r) {
+                $imported = ($r['reviewKind'] ?? '') === ReviewImport::KIND;
+                $decidedBy = $r['status'] !== 'pending' ? trim((string) ($r['decidedByName'] ?? '')) : '';
+                $html .= '<tr class="border-t border-border">';
+                // У перенесённых строк известна только дата активации — время не показываем.
+                $html .= td('Когда', '<span class="whitespace-nowrap">' . h(format_dt((string) $r['createdAt'], !$imported)) . '</span>', 'text-muted-foreground');
+                $html .= td('Филиал', h((string) ($r['branchName'] ?? '—')));
+                $html .= td('Телефон', self::stackCell(self::phoneCell((string) $r['guestPhone']), trim((string) ($r['note'] ?? ''))));
                 $html .= td('Бонусов', '<span class="font-semibold tabular-nums">' . num_fmt((int) $r['bonusAmount']) . '</span>');
-                $html .= td('Статус', status_chip((string) $r['status']) . ($r['status'] !== 'pending' && !empty($r['decidedByName']) ? '<span class="mt-1 block text-xs text-muted-foreground">' . h(short_name((string) $r['decidedByName'])) . '</span>' : ''));
+                $html .= td('Статус', self::stackCell(status_chip((string) $r['status']), $decidedBy !== '' ? short_name($decidedBy) : ''));
                 $html .= td('Добавил(а)', h(short_name((string) $r['createdByName'])), 'text-muted-foreground');
                 if ($canAny) {
                     $html .= td('', $r['status'] === 'pending' && can($user, 'guests.decide', (int) $r['branchId']) ? self::decideForm('decide_review', (int) $r['id']) : '');
@@ -94,9 +210,8 @@ trait PagesGuests
                 $html .= '</tr>';
             }
             $html .= table_close();
-            $html .= '<p class="hidden text-sm text-muted-foreground" data-filter-empty="reviews-table">По этому номеру заявок нет — бонус ему ещё не начисляли.</p>';
         }
-        $html .= '</div></div>';
+        $html .= $journal['pager'] . '</div></div>';
         self::layout($user, $html, ['title' => 'Бонусы за отзывы', 'width' => 'wide']);
     }
 
@@ -117,7 +232,7 @@ trait PagesGuests
 
     private static function pageCompensations(array $user): void
     {
-        [$rows, $status, $tabs, $branchNav] = self::guestRows('compensations', '/compensations');
+        $journal = self::guestJournalView('compensations', '/compensations', 'Поиск по телефону или причине');
         $html = page_head('Компенсации гостям', 'Учёт компенсаций. Начисление бонусов — вручную в Langame.');
         $html .= '<div class="grid items-start gap-6 lg:grid-cols-[21rem_minmax(0,1fr)]">';
 
@@ -128,23 +243,24 @@ trait PagesGuests
         $form .= ui_field('Телефон гостя', '<input name="guestPhone" class="' . field_class('font-mono') . '" required inputmode="tel" autocomplete="off" placeholder="+7 900 000-00-00">');
         $form .= ui_field('Что случилось', '<textarea name="reason" class="' . textarea_class('min-h-20') . '" required minlength="5" maxlength="1000" placeholder="Например: ПК завис на 40 минут"></textarea>');
         $form .= ui_field('Что сделали', '<textarea name="actionsTaken" class="' . textarea_class('min-h-16') . '" maxlength="1000" placeholder="Пересадили, вернули время…"></textarea>');
-        $form .= '<button class="' . btn_class() . '">' . icon('send', 'size-4') . 'Записать</button></form>';
+        $form .= '<button class="' . btn_class() . '">' . icon('send', 'size-4') . 'З��писать</button></form>';
         $html .= card($form, 'p-5 lg:sticky lg:top-8');
 
-        $html .= '<div class="flex min-w-0 flex-col gap-4">';
-        $html .= '<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">' . $tabs . $branchNav . '</div>';
-        $html .= search_input('data-table-filter="comp-table"', 'Поиск по телефону или причине', 'max-w-sm');
-        if (!$rows) {
-            $html .= empty_state('coins', 'Записей нет');
+        $html .= '<div id="journal" class="flex min-w-0 scroll-mt-20 flex-col gap-4">';
+        $html .= '<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">' . $journal['tabs'] . $journal['branchNav'] . '</div>';
+        $html .= $journal['searchForm'];
+        if (!$journal['rows']) {
+            $html .= $journal['search'] !== ''
+                ? empty_state('search', 'Ничего не нашлось', 'По запросу «' . $journal['search'] . '» записей нет. Проверьте запрос или загляните на другие вкладки и филиалы.')
+                : empty_state('coins', 'Записей нет');
         } else {
             $canAny = can($user, 'guests.decide');
-            $html .= table_open(['Когда', 'Филиал', 'Телефон', 'Причина и что сделали', 'Бонусов', 'Статус'] + ($canAny ? [6 => ['', 'w-0']] : []), 'id="comp-table"');
-            foreach ($rows as $r) {
-                $digits = normalize_phone((string) $r['guestPhone']) ?? '';
+            $html .= table_open(['Когда', 'Филиал', 'Телефон', 'Причина и что сделали', 'Бонусов', 'Статус'] + ($canAny ? [6 => ['', 'w-0']] : []));
+            foreach ($journal['rows'] as $r) {
                 $done = trim((string) $r['actionsTaken']);
-                $html .= '<tr class="border-t border-border" data-filter-text="' . h(mb_strtolower($digits . ' ' . $r['guestPhone'] . ' ' . $r['reason'] . ' ' . $done)) . '">';
-                $html .= td('Когда', '<span class="whitespace-nowrap">' . h(format_dt((string) $r['createdAt'])) . '</span><span class="mt-0.5 block text-xs">' . h(short_name((string) $r['createdByName'])) . '</span>', 'text-muted-foreground');
-                $html .= td('Филиал', h($r['branchName']));
+                $html .= '<tr class="border-t border-border">';
+                $html .= td('Когда', self::stackCell('<span class="whitespace-nowrap">' . h(format_dt((string) $r['createdAt'])) . '</span>', short_name((string) $r['createdByName'])), 'text-muted-foreground');
+                $html .= td('Филиал', h((string) ($r['branchName'] ?? '—')));
                 $html .= td('Телефон', self::phoneCell((string) $r['guestPhone']));
                 $html .= td('Причина', '<p class="max-w-md leading-relaxed text-pretty break-words">' . h($r['reason']) . '</p>' . ($done !== '' ? '<p class="mt-1 max-w-md text-xs leading-relaxed text-muted-foreground break-words">' . icon('check', 'mr-1 inline size-3') . h($done) . '</p>' : ''));
                 $html .= td('Бонусов', '<span class="font-semibold tabular-nums">' . num_fmt((int) $r['bonusAmount']) . '</span>');
@@ -155,9 +271,8 @@ trait PagesGuests
                 $html .= '</tr>';
             }
             $html .= table_close();
-            $html .= '<p class="hidden text-sm text-muted-foreground" data-filter-empty="comp-table">Ничего не нашлось.</p>';
         }
-        $html .= '</div></div>';
+        $html .= $journal['pager'] . '</div></div>';
         self::layout($user, $html, ['title' => 'Компенсации', 'width' => 'wide']);
     }
 

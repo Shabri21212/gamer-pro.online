@@ -754,6 +754,9 @@
   .shrink-0 {
     flex-shrink: 0;
   }
+  .basis-56 {
+    flex-basis: calc(var(--spacing) * 56);
+  }
   .-translate-x-1\/2 {
     --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
     translate: var(--tw-translate-x) var(--tw-translate-y);
@@ -2054,6 +2057,9 @@
     .sm\:items-end {
       align-items: flex-end;
     }
+    .sm\:items-start {
+      align-items: flex-start;
+    }
     .sm\:justify-between {
       justify-content: space-between;
     }
@@ -2131,6 +2137,9 @@
     }
     .sm\:text-\[2rem\] {
       font-size: 2rem;
+    }
+    .sm\:whitespace-nowrap {
+      white-space: nowrap;
     }
   }
   @media (width >= 48rem) {

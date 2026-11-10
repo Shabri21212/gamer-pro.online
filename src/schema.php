@@ -16,8 +16,9 @@ declare(strict_types=1);
  * Все строковые колонки в MySQL — utf8mb4_bin: сравнение и сортировка как в SQLite.
  */
 require_once __DIR__ . '/branch-upgrade.php';
+require_once __DIR__ . '/review-import.php';
 
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 const SCHEMA = [
     'app_meta' => [
@@ -483,6 +484,9 @@ final class Schema
             BranchUpgrade::run($pdo);
             if (self::storedVersion($pdo) < 10) {
                 BranchUpgrade::migrateV10($pdo);
+            }
+            if (self::storedVersion($pdo) < 11) {
+                ReviewImport::migrateV11($pdo);
             }
             $pdo->prepare('DELETE FROM app_meta WHERE k = ?')->execute(['schema']);
             $pdo->prepare('INSERT INTO app_meta (k, v) VALUES (?, ?)')->execute(['schema', (string) SCHEMA_VERSION]);

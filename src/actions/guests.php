@@ -18,7 +18,8 @@ trait ActionsGuests
         if ($amount <= 0) {
             self::fail('В условиях акции не указана сумма бонуса — попросите руководителя заполнить её', '/reviews');
         }
-        $existing = Db::one('SELECT status, "createdAt" FROM review_bonuses WHERE "branchId" = ? AND "guestPhone" = ? AND status != ?', [$branch['id'], $phone, 'rejected']);
+        // Номер мог получить бонус несколько раз (перенос из таблицы промокодов) — в отказе называем последнюю дату.
+        $existing = Db::one('SELECT status, "createdAt" FROM review_bonuses WHERE "branchId" = ? AND "guestPhone" = ? AND status != ? ORDER BY "createdAt" DESC, id DESC', [$branch['id'], $phone, 'rejected']);
         if ($existing) {
             self::fail(format_phone($phone) . ' уже получал бонус за отзыв в «' . $branch['name'] . '» (' . format_dt((string) $existing['createdAt'], false) . '). Повторно на этом филиале нельзя.', '/reviews');
         }
